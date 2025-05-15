@@ -4,7 +4,6 @@ import { saveToSheet } from './utils/saveToSheet';
 import { fetchChatIdsFromSheet } from './utils/chatStore';
 import { about } from './commands/about';
 import { help, handleHelpPagination } from './commands/help';
-import { pdf } from './commands/pdf';
 import { greeting, checkMembership } from './text/greeting';
 import { production, development } from './core';
 import { isPrivateChat } from './utils/groupSettings';
@@ -29,10 +28,10 @@ bot.use(async (ctx, next) => {
 // --- Commands ---
 bot.command('about', about());
 
-// Multiple triggers for help/material/pdf content
-const helpTriggers = ['help', 'study', 'material', 'pdf', 'pdfs'];
+// Help commands
+const helpTriggers = ['help', 'study', 'material'];
 helpTriggers.forEach(trigger => bot.command(trigger, help()));
-bot.hears(/^(help|study|material|pdf|pdfs)$/i, help());
+bot.hears(/^(help|study|material)$/i, help());
 
 // Admin: /users
 bot.command('users', async (ctx) => {
@@ -92,7 +91,6 @@ bot.start(async (ctx) => {
   const chat = ctx.chat;
 
   await greeting()(ctx);
-  await pdf()(ctx);
 
   const alreadyNotified = await saveToSheet(chat);
   console.log(`Saved chat ID: ${chat.id} (${chat.type})`);
@@ -113,11 +111,10 @@ bot.on('text', async (ctx) => {
   if (!ctx.chat || !isPrivateChat(ctx.chat.type)) return;
 
   const text = ctx.message.text?.toLowerCase();
-  if (['help', 'study', 'material', 'pdf', 'pdfs'].includes(text)) {
+  if (['help', 'study', 'material'].includes(text)) {
     await help()(ctx);
   } else {
     await greeting()(ctx);
-    await pdf()(ctx);
   }
 });
 
