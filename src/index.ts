@@ -18,68 +18,23 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Restrict to private chats & members only
+// Middleware to restrict private command usage
 bot.use(async (ctx, next) => {
-  if (!ctx.chat || !isPrivateChat(ctx.chat.type)) return;
-  const isAllowed = await checkMembership(ctx);
-  if (isAllowed) await next();
-});
-
-// --- Commands ---
-bot.command('about', about());
-bot.on('text', studySearch());
-
-// Admin: /users
-bot.command('users', async (ctx) => {
-  if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
-
-  try {
-    const chatIds = await fetchChatIdsFromSheet();
-    await ctx.reply(`📊 Total users: ${chatIds.length}`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
-      },
-    });
-  } catch (err) {
-    console.error('Error fetching user count:', err);
-    await ctx.reply('❌ Unable to fetch user count.');
+  if (ctx.chat && isPrivateChat(ctx.chat.type)) {
+    const isAllowed = await checkMembership(ctx);
+    if (!isAllowed) return;
   }
+  await next();
 });
 
-// Admin: /broadcast
-setupBroadcast(bot);
-
-// --- Callback Handler ---
-bot.on('callback_query', async (ctx) => {
-  const callback = ctx.callbackQuery;
-  if ('data' in callback) {
-    const data = callback.data;
-
-    if (data === 'refresh_users' && ctx.from?.id === ADMIN_ID) {
-      try {
-        const chatIds = await fetchChatIdsFromSheet();
-        await ctx.editMessageText(`📊 Total users: ${chatIds.length}`, {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
-          },
-        });
-      } catch (err) {
-        console.error('Error refreshing users:', err);
-        await ctx.answerCbQuery('Failed to refresh.');
-      }
-    } else {
-      await ctx.answerCbQuery('Unknown action');
-    }
-  } else {
-    await ctx.answerCbQuery('Unsupported callback type');
-  }
+// --- Commands (Private Only) ---
+bot.command('about', async (ctx) => {
+  if (!isPrivateChat(ctx.chat.type)) return;
+  await about()(ctx);
 });
 
-// --- /start ---
-bot.start(async (ctx) => {
-  if (!ctx.chat || !isPrivateChat(ctx.chat.type)) return;
+bot.command('start', async (ctx) => {
+  if (!isPrivateChat(ctx.chat.type)) return;
 
   const user = ctx.from;
   const chat = ctx.chat;
@@ -100,22 +55,52 @@ bot.start(async (ctx) => {
   }
 });
 
-// --- Text Handler ---
-bot.on('text', async (ctx) => {
-  if (!ctx.chat || !isPrivateChat(ctx.chat.type)) return;
-  await greeting()(ctx);
+// Admin: /users
+bot.command('users', async (ctx) => {
+  if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
+  try {
+    const chatIds = await fetchChatIdsFromSheet();
+    await ctx.reply(`📊 Total users: ${chatIds.length}`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
+      },
+    });
+  } catch (err) {
+    console.error('Error fetching user count:', err);
+    await ctx.reply('❌ Unable to fetch user count.');
+  }
 });
 
-// --- New Member Welcome (Group) ---
+// Admin: /broadcast
+setupBroadcast(bot);
+
+// --- Study Search (Group + Private) ---
+bot.on('text', async (ctx, next) => {
+  const text = ctx.message?.text?.trim();
+  if (!text) return;
+
+  // Simple trigger logic (e.g. message like "bio mtg" or "mtg notes")
+  const keywords = ['mtg', 'notes', 'bio', 'neet', 'allen', 'question', 'physics'];
+  const isLikelyStudySearch = keywords.some(k => text.toLowerCase().includes(k)) || text.length > 3;
+
+  if (isLikelyStudySearch) {
+    await studySearch()(ctx);
+  } else {
+    await next();
+  }
+});
+
+// --- New Group Member Welcome ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     if (member.username === ctx.botInfo.username) {
-      await ctx.reply('Thanks for adding me!');
+      await ctx.reply('Thanks for adding me! Send any study-related keyword (like "mtg bio") to get materials.');
     }
   }
 });
 
-// --- Message Tracker for Private Chats ---
+// --- Message Tracker (Private only) ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   if (!chat?.id || !isPrivateChat(chat.type)) return;
@@ -132,6 +117,27 @@ bot.on('message', async (ctx) => {
       `*New user interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
       { parse_mode: 'Markdown' }
     );
+  }
+});
+
+// --- Callback: refresh users ---
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  if (data === 'refresh_users' && ctx.from?.id === ADMIN_ID) {
+    try {
+      const chatIds = await fetchChatIdsFromSheet();
+      await ctx.editMessageText(`📊 Total users: ${chatIds.length}`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
+        },
+      });
+    } catch (err) {
+      console.error('Error refreshing users:', err);
+      await ctx.answerCbQuery('Failed to refresh.');
+    }
+  } else {
+    await ctx.answerCbQuery('Unknown action');
   }
 });
 
