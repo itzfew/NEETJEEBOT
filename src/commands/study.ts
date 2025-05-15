@@ -20,16 +20,15 @@ function createTelegramLink(key: string): string {
 
 async function shortenLink(link: string, alias: string): Promise<string> {
   try {
-    let safeAlias = alias.replace(/[^a-zA-Z0-9-_]/g, '');
-
-    // Repeatedly cut to half until length ≤ 30
-    while (safeAlias.length > 30) {
-      safeAlias = safeAlias.slice(0, Math.ceil(safeAlias.length / 2));
+    // Trim alias to max 30 chars if needed
+    if (alias.length > 30) {
+      alias = alias.substring(0, 30);
     }
 
-    const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${safeAlias}`;
+    const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`;
     const res = await fetch(url);
     const data = await res.json();
+
     return data.status === 'success' ? data.shortenedUrl : link;
   } catch (e) {
     console.error('Shorten failed:', e);
