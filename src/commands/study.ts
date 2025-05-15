@@ -36,8 +36,11 @@ function matchMaterial(query: string): MaterialItem[] {
 
 export function studySearch() {
   return async (ctx: Context) => {
-    const text = 'text' in ctx.message ? ctx.message.text : '';
-    if (!text) return ctx.reply('❌ Please enter a topic to search.');
+    if (!ctx.message || !('text' in ctx.message)) {
+      return ctx.reply('❌ Please send a text message to search study material.');
+    }
+
+    const text = ctx.message.text;
 
     const matches = matchMaterial(text);
     if (matches.length === 0) {
@@ -52,3 +55,4 @@ export function studySearch() {
     await ctx.reply(response, { parse_mode: 'Markdown' });
   };
 }
+  
