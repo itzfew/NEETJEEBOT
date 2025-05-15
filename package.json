@@ -1,6 +1,6 @@
 {
   "name": "Eduhub",
-  "version": "1.1.1",
+  "version": "1.1.0",
   "description": "Telegram Bot EduHub",
   "main": "src/index.ts",
   "author": "itzfew (https://t.me/itzfew)",
@@ -23,7 +23,7 @@
   },
   "scripts": {
     "dev": "DEBUG=bot* dotenv -- nodemon -e ts -x ts-node src/index.ts",
-    "devWindows": "@powershell -Command $env:DEBUG='bot*'; dotenv -- -- nodemon -e ts -x ts-node src/index.ts",
+    "devWindows": "@powershell -Command $env:DEBUG='bot*';dotenv -- -- nodemon -e ts -x ts-node src/index.ts",
     "build": "ncc build src/index.ts -o public -m",
     "prettier": "prettier --write 'src/**/*.ts'",
     "lint": "tsc --noemit"
