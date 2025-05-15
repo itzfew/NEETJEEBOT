@@ -1,5 +1,6 @@
 import { Context } from 'telegraf';
 import material from '../../data/material.json';
+import fetch from 'node-fetch'; // Required for Vercel (Node < 18)
 
 interface MaterialItem {
   title: string;
@@ -22,9 +23,15 @@ async function shortenLink(link: string, alias: string): Promise<string> {
     const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`;
     const res = await fetch(url);
     const data = await res.json();
-    return data.status === 'success' ? data.shortenedUrl : link;
+
+    if (data.status === 'success') {
+      return data.shortenedUrl;
+    } else {
+      console.warn(`Adrino failed for ${alias}:`, data);
+      return link;
+    }
   } catch (e) {
-    console.error('Shorten failed:', e);
+    console.error(`Adrino error for ${alias}:`, e);
     return link;
   }
 }
@@ -39,13 +46,22 @@ function similarity(a: string, b: string): number {
 // -------------------- Prepare & Match --------------------
 async function prepareMaterialData(): Promise<MaterialItem[]> {
   const output: MaterialItem[] = [];
+
   for (const cat of material) {
     for (const item of cat.items) {
       const tgLink = createTelegramLink(item.key);
       const shortLink = await shortenLink(tgLink, item.key);
-      output.push({ title: cat.title, label: item.label, key: item.key, telegramLink: tgLink, shortenedLink: shortLink });
+      output.push({
+        title: cat.title,
+        label: item.label,
+        key: item.key,
+        telegramLink: tgLink,
+        shortenedLink: shortLink,
+      });
     }
   }
+
+  console.log(`Prepared ${output.length} material items.`);
   return output;
 }
 
@@ -53,34 +69,73 @@ async function matchMaterial(query: string): Promise<MaterialItem[]> {
   const keywords = query.toLowerCase().split(/\s+/);
   const all = await prepareMaterialData();
 
-  return all.filter(item => {
+  const filtered = all.filter(item => {
     const text = `${item.title} ${item.label}`.toLowerCase();
     return keywords.some(k => text.includes(k) || similarity(text, k) > 0.4);
   });
+
+  console.log(`Matched ${filtered.length} items for "${query}"`);
+  return filtered;
 }
 
 // -------------------- Telegraph Integration --------------------
 const defaultInstructions = [
-  { tag: 'p', children: ['📺 Tutorial: ', { tag: 'a', attrs: { href: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }, children: ['YouTube Guide'] }] },
+  {
+    tag: 'p',
+    children: [
+      '📺 Tutorial: ',
+      {
+        tag: 'a',
+        attrs: { href: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
+        children: ['YouTube Guide'],
+      },
+    ],
+  },
   { tag: 'p', children: ['📚 Join channels for updates:'] },
   {
     tag: 'ul',
     children: [
-      { tag: 'li', children: [{ tag: 'a', attrs: { href: 'https://t.me/Material_eduhubkmrbot' }, children: ['@Material_eduhubkmrbot'] }, ' - Study materials'] },
-      { tag: 'li', children: [{ tag: 'a', attrs: { href: 'https://t.me/EduhubKMR_bot' }, children: ['@EduhubKMR_bot'] }, ' - QuizBot'] },
-    ]
-  }
+      {
+        tag: 'li',
+        children: [
+          {
+            tag: 'a',
+            attrs: { href: 'https://t.me/Material_eduhubkmrbot' },
+            children: ['@Material_eduhubkmrbot'],
+          },
+          ' - Study materials',
+        ],
+      },
+      {
+        tag: 'li',
+        children: [
+          {
+            tag: 'a',
+            attrs: { href: 'https://t.me/EduhubKMR_bot' },
+            children: ['@EduhubKMR_bot'],
+          },
+          ' - QuizBot',
+        ],
+      },
+    ],
+  },
 ];
 
 async function createTelegraphAccount() {
   const res = await fetch('https://api.telegra.ph/createAccount', {
     method: 'POST',
-    body: new URLSearchParams({ short_name: 'studybot', author_name: 'Study Bot' }),
+    body: new URLSearchParams({
+      short_name: 'studybot',
+      author_name: 'Study Bot',
+    }),
   });
 
   const data = await res.json();
-  if (data.ok) accessToken = data.result.access_token;
-  else throw new Error(data.error || 'Telegraph account creation failed');
+  if (data.ok) {
+    accessToken = data.result.access_token;
+  } else {
+    throw new Error(data.error || 'Telegraph account creation failed');
+  }
 }
 
 async function createTelegraphPageForMatches(query: string, matches: MaterialItem[]): Promise<string> {
@@ -95,16 +150,23 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
         tag: 'li',
         children: [
           '• ',
-          { tag: 'a', attrs: { href: item.shortenedLink, target: '_blank' }, children: [item.label] },
-          ` (${item.title})`
-        ]
-      }))
+          {
+            tag: 'a',
+            attrs: { href: item.shortenedLink, target: '_blank' },
+            children: [item.label],
+          },
+          ` (${item.title})`,
+        ],
+      })),
     },
     { tag: 'hr' },
     { tag: 'h4', children: ['ℹ️ Resources & Instructions'] },
     ...defaultInstructions,
-    { tag: 'hr' },
-    { tag: 'p', attrs: { style: 'color: gray; font-size: 0.8em' }, children: ['Generated by Study Bot'] }
+    {
+      tag: 'p',
+      attrs: { style: 'color: gray; font-size: 0.8em' },
+      children: ['Generated by Study Bot'],
+    },
   ];
 
   const res = await fetch('https://api.telegra.ph/createPage', {
@@ -114,11 +176,13 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
       title: `Study Material: ${query.substring(0, 50)}${query.length > 50 ? '...' : ''}`,
       author_name: 'Study Bot',
       content: JSON.stringify(content),
-      return_content: 'true'
+      return_content: 'true',
     }),
   });
 
   const data = await res.json();
+  console.log('Telegraph response:', data);
+
   if (data.ok) return `https://telegra.ph/${data.result.path}`;
   else throw new Error(data.error || 'Page creation failed');
 }
@@ -134,39 +198,38 @@ export function studySearch() {
         return ctx.reply('❌ Please enter a search term.');
       }
 
-      // Determine mention (group or private)
-      const mention = ctx.chat?.type.endsWith('group') && ctx.from?.username
-        ? `@${ctx.from.username}`
-        : ctx.from?.first_name || '';
+      const mention =
+        ctx.chat?.type?.includes('group') && ctx.from?.username
+          ? `@${ctx.from.username}`
+          : ctx.from?.first_name || '';
 
-      // Send "searching..." and delete it later
       const loadingMsg = await ctx.reply(`⏳ Searching study materials for "${query}"...`, {
-        reply_to_message_id: ctx.message.message_id
+        reply_to_message_id: ctx.message.message_id,
       });
 
       const matches = await matchMaterial(query);
+
       if (matches.length === 0) {
         await ctx.deleteMessage(loadingMsg.message_id);
-        return ctx.reply(`❌ ${mention}, no matching materials found for "${query}". Try different keywords.`, {
-          reply_to_message_id: ctx.message.message_id
+        return ctx.reply(`❌ ${mention}, no materials found for "${query}".`, {
+          reply_to_message_id: ctx.message.message_id,
         });
       }
 
       const url = await createTelegraphPageForMatches(query, matches);
       await ctx.deleteMessage(loadingMsg.message_id);
 
-      const capitalQuery = query.split(/\s+/).slice(0, 3).join(' ');
-      const responseMsg = `🔍 ${mention}, view ${matches.length} matched for *${capitalQuery}*:\n[Click here to view study materials](${url})`;
+      const shortQuery = query.split(/\s+/).slice(0, 3).join(' ');
+      const response = `🔍 ${mention}, found *${matches.length}* matches for *${shortQuery}*:\n[Click here to view materials](${url})`;
 
-      await ctx.reply(responseMsg, {
+      await ctx.reply(response, {
         parse_mode: 'Markdown',
         disable_web_page_preview: true,
-        reply_to_message_id: ctx.message.message_id
+        reply_to_message_id: ctx.message.message_id,
       });
-
     } catch (error) {
       console.error('Study search error:', error);
-      ctx.reply('❌ An error occurred. Please try again later.');
+      await ctx.reply('❌ Something went wrong. Please try again later.');
     }
   };
 }
