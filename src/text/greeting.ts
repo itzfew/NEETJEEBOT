@@ -72,9 +72,17 @@ const greeting = () => async (ctx: Context) => {
 
     if (greetings.includes(text)) {
       await ctx.reply(
-        `Welcome ${user.first_name}! You have full access.\n\nUse /help or /study to explore available commands and get started with your NEET Preparation!`,
+        `Welcome ${user.first_name}!\n\n*Do you need any study material?*\n\nJust ask me like this:\n"Arihant Physics exemplar 11th"\n\nYou can also add me to your study group to help students with:\n- Quick material searches\n- Copyright-free resources\n- Instant answers to study queries\n\nI'll assist everyone in the group while following all copyright guidelines.`,
         {
           parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{
+                text: 'Add me to your group',
+                url: `https://t.me/${ctx.botInfo?.username}?startgroup=true`
+              }]
+            ]
+          }
         }
       );
     }
