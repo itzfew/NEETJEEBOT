@@ -34,19 +34,76 @@ function matchMaterial(query: string): MaterialItem[] {
   return results;
 }
 
-// Default instructions (simplified for Telegraph)
+// ... (previous imports and interfaces remain the same)
+
+// Updated default instructions with clickable links
 const defaultInstructions = [
-  "📚 Download the study material using the link above.",
-  "🎥 For detailed instructions, watch: [YouTube Tutorial](https://youtube.com)",
-  "",
-  "Join these channels for more resources:",
-  "- @Material_eduhubkmrbot (NEET/JEE materials)",
-  "- @EduhubKMR_bot (QuizBot for NEET subjects)",
-  "",
-  "Study groups:",
-  "- NEETUG_26",
-  "- Neetpw01"
-].join("\n");
+  { 
+    tag: 'p', 
+    children: [
+      '📺 For detailed instructions, watch: ',
+      { 
+        tag: 'a', 
+        attrs: { href: 'https://youtu.be' }, 
+        children: ['YouTube Tutorial'] 
+      }
+    ] 
+  },
+  { tag: 'p', children: ['Join these channels for more resources:'] },
+  {
+    tag: 'ul',
+    children: [
+      {
+        tag: 'li',
+        children: [
+          { 
+            tag: 'a', 
+            attrs: { href: 'https://t.me/Material_eduhubkmrbot' }, 
+            children: ['@Material_eduhubkmrbot'] 
+          },
+          ' (NEET/JEE materials)'
+        ]
+      },
+      {
+        tag: 'li',
+        children: [
+          { 
+            tag: 'a', 
+            attrs: { href: 'https://t.me/EduhubKMR_bot' }, 
+            children: ['@EduhubKMR_bot'] 
+          },
+          ' (QuizBot for NEET subjects)'
+        ]
+      }
+    ]
+  },
+  { tag: 'p', children: ['Study groups:'] },
+  {
+    tag: 'ul',
+    children: [
+      {
+        tag: 'li',
+        children: [
+          { 
+            tag: 'a', 
+            attrs: { href: 'https://t.me/NEETUG_26' }, 
+            children: ['NEETUG_26'] 
+          }
+        ]
+      },
+      {
+        tag: 'li',
+        children: [
+          { 
+            tag: 'a', 
+            attrs: { href: 'https://t.me/Neetpw01' }, 
+            children: ['Neetpw01'] 
+          }
+        ]
+      }
+    ]
+  }
+];
 
 export async function createTelegraphPage(title: string, link: string, matches: MaterialItem[]): Promise<string> {
   if (!accessToken) {
