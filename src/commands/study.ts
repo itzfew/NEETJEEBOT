@@ -1,10 +1,13 @@
 import { Context } from 'telegraf';
-import material from '../../data/material.json'; // Adjust path as needed
+import material from '../../data/material.json';
+import { Telegraph } from 'telegraph-node';
+
+const telegraph = new Telegraph();
+let accessToken: string | null = null;
 
 interface MaterialItem {
   title: string;
   tags: string[];
-  telegraph: string;
 }
 
 function similarity(a: string, b: string): number {
@@ -18,7 +21,6 @@ function matchMaterial(query: string): MaterialItem[] {
 
   for (const item of material as MaterialItem[]) {
     const allText = (item.title + ' ' + item.tags.join(' ')).toLowerCase();
-
     for (const key of keywords) {
       if (
         allText.includes(key) ||
@@ -34,6 +36,25 @@ function matchMaterial(query: string): MaterialItem[] {
   return results;
 }
 
+async function createTelegraphPage(title: string, content: string): Promise<string> {
+  if (!accessToken) {
+    const account = await telegraph.createAccount("StudyBot", {
+      short_name: "studybot",
+      author_name: "Study Bot",
+    });
+    accessToken = account.access_token;
+  }
+
+  const page = await telegraph.createPage(accessToken, title, [
+    {
+      tag: 'p',
+      children: [content],
+    }
+  ], { return_content: true });
+
+  return `https://telegra.ph/${page.path}`;
+}
+
 export function studySearch() {
   return async (ctx: Context) => {
     if (!ctx.message || !('text' in ctx.message)) {
@@ -41,7 +62,6 @@ export function studySearch() {
     }
 
     const text = ctx.message.text;
-
     const matches = matchMaterial(text);
     if (matches.length === 0) {
       return ctx.reply('❌ No matching study material found.');
@@ -49,10 +69,11 @@ export function studySearch() {
 
     let response = `🔍 *Matched Study Material:*\n\n`;
     for (const item of matches) {
-      response += `• [${item.title}](${item.telegraph})\n`;
+      const previewText = `Title: ${item.title}\nTags: ${item.tags.join(', ')}`;
+      const telegraphLink = await createTelegraphPage(item.title, previewText);
+      response += `• [${item.title}](${telegraphLink})\n`;
     }
 
     await ctx.reply(response, { parse_mode: 'Markdown' });
   };
 }
-  
