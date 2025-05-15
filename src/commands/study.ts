@@ -1,5 +1,5 @@
 import { Context } from 'telegraf';
-import material from '../data/material.json'; // adjust path if needed
+import material from '../../data/material.json'; // Adjust path as needed
 
 interface MaterialItem {
   title: string;
@@ -36,12 +36,7 @@ function matchMaterial(query: string): MaterialItem[] {
 
 export function studySearch() {
   return async (ctx: Context) => {
-    // Check if the message is a text message
-    if (!('text' in ctx.message)) {
-      return ctx.reply('❌ Please send a text message with your search query.');
-    }
-
-    const text = ctx.message.text;
+    const text = 'text' in ctx.message ? ctx.message.text : '';
     if (!text) return ctx.reply('❌ Please enter a topic to search.');
 
     const matches = matchMaterial(text);
