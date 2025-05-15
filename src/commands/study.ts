@@ -172,7 +172,7 @@ function findMatchingMaterials(query: string): SearchMatch[] {
       
       // Check aliases if they exist
       const aliasMatch = item.aliases?.some(alias => 
-        alias.toLowerCase().includes(lowerQuery)
+        alias.toLowerCase().includes(lowerQuery))
         || false;
 
       // If any match is found (40% threshold is handled by the caller)
@@ -205,7 +205,7 @@ export function studySearch() {
       // If no matches found, check with partial matching
       const matches = allMatches.length > 0 
         ? allMatches 
-        : findMatchingMaterials(query.substring(0, Math.floor(query.length * 0.4)) || [];
+        : findMatchingMaterials(query.substring(0, Math.floor(query.length * 0.4))) || [];
 
       if (matches.length === 0) {
         await ctx.reply('No study materials found for your query. Try different keywords.');
