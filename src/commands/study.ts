@@ -54,41 +54,61 @@ async function createTelegraphAccount(): Promise<void> {
 
 // Default instructions + resource links to add to each page
 const defaultInstructions = `
-Download the study material using the above link.
-
-For detailed instructions, watch: https://youtu.be/example_instructions
-
-Join essential channels and bots for more resources:
-- **@Material_eduhubkmrbot** for NEET, JEE, and other competitive exams.
-- Features include:
-  - Access to study materials for **NEET** and **JEE**
-  - Practice tests for **NEET** and **JEE**
-  - Links to study groups for peer interaction
-  - NCERT solutions and other helpful resources
-
-You can also try [@EduhubKMR_bot](https://t.me/EduhubKMR_bot) – EduhubKMR QuizBot – Practice **NEET Biology**, **Physics** & **Chemistry** with answers and explanations!
-
-More study groups:
-- https://t.me/NEETUG_26
-- https://t.me/Neetpw01
+<div style="border:1px solid #ccc; padding:10px; border-radius:5px; margin-top:10px;">
+  <p>Download the study material using the above link.</p>
+  <p>For detailed instructions, watch: <a href="https://youtu.be/example_instructions" target="_blank" rel="noopener">YouTube Tutorial</a></p>
+  <p><b>Join essential channels and bots for more resources:</b></p>
+  <ul>
+    <li><a href="https://t.me/Material_eduhubkmrbot" target="_blank" rel="noopener">@Material_eduhubkmrbot</a> for NEET, JEE, and other competitive exams.</li>
+  </ul>
+  <p><b>Features include:</b></p>
+  <ul>
+    <li>Access to study materials for <b>NEET</b> and <b>JEE</b></li>
+    <li>Practice tests for <b>NEET</b> and <b>JEE</b></li>
+    <li>Links to study groups for peer interaction</li>
+    <li>NCERT solutions and other helpful resources</li>
+  </ul>
+  <p>You can also try <a href="https://t.me/EduhubKMR_bot" target="_blank" rel="noopener">@EduhubKMR_bot</a> – EduhubKMR QuizBot – Practice NEET Biology, Physics & Chemistry with answers and explanations!</p>
+  <p><b>More study groups:</b></p>
+  <ul>
+    <li><a href="https://t.me/NEETUG_26" target="_blank" rel="noopener">NEETUG_26</a></li>
+    <li><a href="https://t.me/Neetpw01" target="_blank" rel="noopener">Neetpw01</a></li>
+  </ul>
+</div>
 `;
 
-// Create Telegraph page dynamically with content preview
+// And update createTelegraphPage content to wrap matched results in a bordered div with arrows:
+
 export async function createTelegraphPage(title: string, link: string): Promise<string> {
   if (!accessToken) await createTelegraphAccount();
 
-  // Build the content array according to Telegraph API format
   const contentArray = [
     { tag: 'h2', children: [title] },
     {
       tag: 'p',
       children: [
         'Download Link: ',
-        { tag: 'a', attrs: { href: link }, children: [link] }
+        { tag: 'a', attrs: { href: link, target: '_blank', rel: 'noopener' }, children: [link] },
       ],
     },
-    { tag: 'p', children: [defaultInstructions] },
+    { tag: 'div', attrs: { style: 'border:1px solid #ccc; padding:10px; border-radius:5px; margin-top:10px;' }, children: [
+      { tag: 'p', children: ['🔍 Matched Study Material List:'] },
+      { tag: 'ul', children: material.map(item => ({
+          tag: 'li',
+          children: [
+            '➥ ',
+            { tag: 'a', attrs: { href: item.link, target: '_blank', rel: 'noopener' }, children: [item.title] }
+          ]
+      })) },
+    ]},
+    { tag: 'div', attrs: { style: 'margin-top:15px;' }, children: [
+      { tag: 'p', children: ['Instructions and Resources:'] },
+      { tag: 'raw', children: [defaultInstructions] } // raw to insert HTML string directly if supported; else parse tags
+    ]}
   ];
+
+  // Note: If Telegraph API does not support 'raw', you have to convert defaultInstructions string to tag objects.
+  // Or you can send defaultInstructions as plain paragraph array with links.
 
   const res = await fetch('https://api.telegra.ph/createPage', {
     method: 'POST',
