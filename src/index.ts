@@ -3,7 +3,6 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { saveToSheet } from './utils/saveToSheet';
 import { fetchChatIdsFromSheet } from './utils/chatStore';
 import { about } from './commands/about';
-import { help, handleHelpPagination } from './commands/help';
 import { greeting, checkMembership } from './text/greeting';
 import { production, development } from './core';
 import { isPrivateChat } from './utils/groupSettings';
@@ -27,11 +26,6 @@ bot.use(async (ctx, next) => {
 
 // --- Commands ---
 bot.command('about', about());
-
-// Help commands
-const helpTriggers = ['help', 'study', 'material'];
-helpTriggers.forEach(trigger => bot.command(trigger, help()));
-bot.hears(/^(help|study|material)$/i, help());
 
 // Admin: /users
 bot.command('users', async (ctx) => {
@@ -60,9 +54,7 @@ bot.on('callback_query', async (ctx) => {
   if ('data' in callback) {
     const data = callback.data;
 
-    if (data.startsWith('help_page_')) {
-      await handleHelpPagination()(ctx);
-    } else if (data === 'refresh_users' && ctx.from?.id === ADMIN_ID) {
+    if (data === 'refresh_users' && ctx.from?.id === ADMIN_ID) {
       try {
         const chatIds = await fetchChatIdsFromSheet();
         await ctx.editMessageText(`📊 Total users: ${chatIds.length}`, {
@@ -109,20 +101,14 @@ bot.start(async (ctx) => {
 // --- Text Handler ---
 bot.on('text', async (ctx) => {
   if (!ctx.chat || !isPrivateChat(ctx.chat.type)) return;
-
-  const text = ctx.message.text?.toLowerCase();
-  if (['help', 'study', 'material'].includes(text)) {
-    await help()(ctx);
-  } else {
-    await greeting()(ctx);
-  }
+  await greeting()(ctx);
 });
 
 // --- New Member Welcome (Group) ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     if (member.username === ctx.botInfo.username) {
-      await ctx.reply('Thanks for adding me! Type /help to get started.');
+      await ctx.reply('Thanks for adding me!');
     }
   }
 });
