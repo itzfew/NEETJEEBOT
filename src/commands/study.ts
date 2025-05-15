@@ -134,19 +134,26 @@ export function studySearch() {
         return ctx.reply('❌ Please enter a search term.');
       }
 
-      // Reply fast: "Searching..."
+      // Determine mention (group or private)
       const mention = ctx.chat?.type.endsWith('group') && ctx.from?.username
         ? `@${ctx.from.username}`
         : ctx.from?.first_name || '';
 
-      await ctx.reply(`⏳ Searching study materials for "${query}"...`);
+      // Send "searching..." and delete it later
+      const loadingMsg = await ctx.reply(`⏳ Searching study materials for "${query}"...`, {
+        reply_to_message_id: ctx.message.message_id
+      });
 
       const matches = await matchMaterial(query);
       if (matches.length === 0) {
-        return ctx.reply(`❌ ${mention}, no matching materials found for "${query}". Try different keywords.`);
+        await ctx.deleteMessage(loadingMsg.message_id);
+        return ctx.reply(`❌ ${mention}, no matching materials found for "${query}". Try different keywords.`, {
+          reply_to_message_id: ctx.message.message_id
+        });
       }
 
       const url = await createTelegraphPageForMatches(query, matches);
+      await ctx.deleteMessage(loadingMsg.message_id);
 
       const capitalQuery = query.split(/\s+/).slice(0, 3).join(' ');
       const responseMsg = `🔍 ${mention}, view ${matches.length} matched for *${capitalQuery}*:\n[Click here to view study materials](${url})`;
