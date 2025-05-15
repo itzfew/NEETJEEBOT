@@ -36,7 +36,12 @@ function matchMaterial(query: string): MaterialItem[] {
 
 export function studySearch() {
   return async (ctx: Context) => {
-    const text = ctx.message?.text || '';
+    // Check if the message is a text message
+    if (!('text' in ctx.message)) {
+      return ctx.reply('❌ Please send a text message with your search query.');
+    }
+
+    const text = ctx.message.text;
     if (!text) return ctx.reply('❌ Please enter a topic to search.');
 
     const matches = matchMaterial(text);
