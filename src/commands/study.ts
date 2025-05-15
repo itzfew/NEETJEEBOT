@@ -20,7 +20,6 @@ function createTelegramLink(key: string): string {
 
 async function shortenLink(link: string, alias: string): Promise<string> {
   try {
-    // Trim alias to max 30 chars if needed
     if (alias.length > 30) {
       alias = alias.substring(0, 30);
     }
@@ -194,8 +193,19 @@ export function studySearch() {
       if (!ctx.message || !('text' in ctx.message)) return;
 
       const query = ctx.message.text.trim();
-      if (!query) {
-        return ctx.reply('❌ Please enter a search term.');
+
+      // Ignore known bot logs or non-search phrases
+      const ignoreQueries = [
+        'running bot in production mode',
+        'bot running in production mode',
+        'start',
+        '/start',
+        'help',
+        '/help',
+      ];
+
+      if (!query || ignoreQueries.includes(query.toLowerCase())) {
+        return ctx.reply('❌ Please enter a valid search term.');
       }
 
       const mention =
@@ -203,6 +213,7 @@ export function studySearch() {
           ? `@${ctx.from.username}`
           : ctx.from?.first_name || '';
 
+      // Send searching message
       const loadingMsg = await ctx.reply(`⏳ Searching study materials for "${query}"...`, {
         reply_to_message_id: ctx.message.message_id,
       });
@@ -211,7 +222,7 @@ export function studySearch() {
 
       if (matches.length === 0) {
         await ctx.deleteMessage(loadingMsg.message_id);
-        return ctx.reply(`❌ ${mention}, no materials found for "${query}".`, {
+        return ctx.reply(`❌ ${mention}, no materials found for "${query}". Try different keywords.`, {
           reply_to_message_id: ctx.message.message_id,
         });
       }
