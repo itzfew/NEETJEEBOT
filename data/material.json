@@ -143,5 +143,11 @@
     { "label": "Arihant Mathematics Handbook", "key": "arihant-mathematics-handbook" },
     { "label": "Arihant Chemistry Handbook", "key": "arihant-chemistry-handbook" }
   ]
+},
+  {
+  "title": "Mock Tests",
+  "items": [
+    { "label": "10 Full Syllabus Mock Tests by Dr. Anand Mani", "key": "10-full-syllabus-mock-anand" }
+  ]
 }
 ]
