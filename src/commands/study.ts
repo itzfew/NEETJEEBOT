@@ -3,12 +3,60 @@ import material from '../../data/material.json';
 
 interface MaterialItem {
   title: string;
-  link: string;
+  label: string;
+  key: string;
+  telegramLink: string;
+  shortenedLink: string;
 }
 
 let accessToken: string | null = null;
+const ADRINO_API_KEY = '5a2539904639474b5f3da41f528199204eb76f65';
 
-// Improved similarity function
+// Function to create Telegram deep link
+function createTelegramLink(key: string): string {
+  return `https://t.me/Material_eduhubkmrbot?start=${key}`;
+}
+
+// Function to shorten link via AdrinoLinks API
+async function shortenLink(telegramLink: string, alias: string): Promise<string> {
+  try {
+    const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(telegramLink)}&alias=${alias}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.status === 'success' && data.shortenedUrl) {
+      return data.shortenedUrl;
+    }
+    return telegramLink; // Fallback to original link if shortening fails
+  } catch (error) {
+    console.error('Error shortening link:', error);
+    return telegramLink;
+  }
+}
+
+// Prepare material data with links
+async function prepareMaterialData() {
+  const preparedMaterial: MaterialItem[] = [];
+  
+  for (const category of material) {
+    for (const item of category.items) {
+      const telegramLink = createTelegramLink(item.key);
+      const shortenedLink = await shortenLink(telegramLink, item.key);
+      
+      preparedMaterial.push({
+        title: category.title,
+        label: item.label,
+        key: item.key,
+        telegramLink,
+        shortenedLink
+      });
+    }
+  }
+  
+  return preparedMaterial;
+}
+
+// Similarity function
 function similarity(a: string, b: string): number {
   const setA = new Set(a.toLowerCase().split(''));
   const setB = new Set(b.toLowerCase().split(''));
@@ -16,14 +64,16 @@ function similarity(a: string, b: string): number {
   return intersection.size / Math.max(setA.size, setB.size);
 }
 
-function matchMaterial(query: string): MaterialItem[] {
+// Match material function
+async function matchMaterial(query: string): Promise<MaterialItem[]> {
   const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const preparedMaterial = await prepareMaterialData();
   const results: MaterialItem[] = [];
 
-  for (const item of material as MaterialItem[]) {
-    const itemTitle = item.title.toLowerCase();
+  for (const item of preparedMaterial) {
+    const itemText = `${item.title} ${item.label}`.toLowerCase();
     const matchesKeyword = keywords.some(key => 
-      itemTitle.includes(key) || similarity(itemTitle, key) > 0.4
+      itemText.includes(key) || similarity(itemText, key) > 0.4
     );
     
     if (matchesKeyword) {
@@ -34,7 +84,7 @@ function matchMaterial(query: string): MaterialItem[] {
   return results;
 }
 
-// Default instructions with all clickable links
+// Default instructions
 const defaultInstructions = [
   { 
     tag: 'p', 
@@ -72,69 +122,12 @@ const defaultInstructions = [
           },
           ' - QuizBot for NEET subjects'
         ]
-      },
-      {
-        tag: 'li',
-        children: [
-          { 
-            tag: 'a', 
-            attrs: { href: 'https://t.me/Study_Material_Hub', target: '_blank' }, 
-            children: ['@Study_Material_Hub'] 
-          },
-          ' - General study materials'
-        ]
       }
     ]
-  },
-  { tag: 'p', children: ['👥 Join these study groups:'] },
-  {
-    tag: 'ul',
-    children: [
-      {
-        tag: 'li',
-        children: [
-          { 
-            tag: 'a', 
-            attrs: { href: 'https://t.me/NEETUG_26', target: '_blank' }, 
-            children: ['NEETUG_26'] 
-          }
-        ]
-      },
-      {
-        tag: 'li',
-        children: [
-          { 
-            tag: 'a', 
-            attrs: { href: 'https://t.me/Neetpw01', target: '_blank' }, 
-            children: ['Neetpw01'] 
-          }
-        ]
-      },
-      {
-        tag: 'li',
-        children: [
-          { 
-            tag: 'a', 
-            attrs: { href: 'https://t.me/Medical_Students_Forum', target: '_blank' }, 
-            children: ['Medical Students Forum'] 
-          }
-        ]
-      }
-    ]
-  },
-  { 
-    tag: 'p', 
-    children: [
-      '🔗 More resources: ',
-      { 
-        tag: 'a', 
-        attrs: { href: 'https://t.me/StudyResourcesPortal', target: '_blank' }, 
-        children: ['Study Resources Portal'] 
-      }
-    ] 
   }
 ];
 
+// Create Telegraph account
 async function createTelegraphAccount(): Promise<void> {
   const res = await fetch('https://api.telegra.ph/createAccount', {
     method: 'POST',
@@ -152,16 +145,16 @@ async function createTelegraphAccount(): Promise<void> {
   }
 }
 
-export async function createTelegraphPage(title: string, link: string, matches: MaterialItem[]): Promise<string> {
+// Create Telegraph page
+export async function createTelegraphPage(item: MaterialItem, matches: MaterialItem[]): Promise<string> {
   if (!accessToken) {
     await createTelegraphAccount();
   }
 
   const contentArray = [
-    // Header with title
-    { tag: 'h3', children: [title] },
+    { tag: 'h3', children: [item.label] },
+    { tag: 'p', children: [`📚 Category: ${item.title}`] },
     
-    // Download link section
     { 
       tag: 'p', 
       children: [
@@ -172,43 +165,40 @@ export async function createTelegraphPage(title: string, link: string, matches: 
         },
         { 
           tag: 'a', 
-          attrs: { href: link, target: '_blank' }, 
+          attrs: { href: item.shortenedLink, target: '_blank' }, 
           children: ['Click here'] 
         }
       ] 
     },
     
-    // Matched results section
     ...(matches.length > 0 ? [
       { tag: 'hr' },
       { tag: 'h4', children: ['🔍 Similar Study Materials'] },
       { 
         tag: 'ul', 
-        children: matches.map(item => ({
+        children: matches.map(match => ({
           tag: 'li',
           children: [
             '• ',
             { 
               tag: 'a', 
-              attrs: { href: item.link, target: '_blank' }, 
-              children: [item.title] 
+              attrs: { href: match.shortenedLink, target: '_blank' }, 
+              children: [match.label] 
             }
           ]
         }))
       }
     ] : []),
     
-    // Resources section
     { tag: 'hr' },
     { tag: 'h4', children: ['ℹ️ Resources & Instructions'] },
     ...defaultInstructions,
     
-    // Footer
     { tag: 'hr' },
     { 
       tag: 'p', 
       attrs: { style: 'color: #666; font-size: 0.8em;' },
-      children: ['Generated by Study Bot • All links are verified'] 
+      children: ['Generated by Study Bot • Links open in Telegram'] 
     }
   ];
 
@@ -216,7 +206,7 @@ export async function createTelegraphPage(title: string, link: string, matches: 
     method: 'POST',
     body: new URLSearchParams({
       access_token: accessToken!,
-      title: `Study Material: ${title.substring(0, 50)}${title.length > 50 ? '...' : ''}`,
+      title: `Study Material: ${item.label.substring(0, 50)}${item.label.length > 50 ? '...' : ''}`,
       author_name: 'Study Bot',
       content: JSON.stringify(contentArray),
       return_content: 'true'
@@ -231,6 +221,7 @@ export async function createTelegraphPage(title: string, link: string, matches: 
   }
 }
 
+// Main search function
 export function studySearch() {
   return async (ctx: Context) => {
     try {
@@ -243,7 +234,7 @@ export function studySearch() {
         return ctx.reply('❌ Please enter a search term.');
       }
 
-      const matches = matchMaterial(query);
+      const matches = await matchMaterial(query);
       if (matches.length === 0) {
         return ctx.reply('❌ No matching study material found. Try different keywords.');
       }
@@ -253,12 +244,12 @@ export function studySearch() {
         matches.map(async item => {
           try {
             // Pass only the current item's matches (excluding itself)
-            const similarItems = matches.filter(m => m.title !== item.title);
-            const url = await createTelegraphPage(item.title, item.link, similarItems);
-            return `• [${item.title}](${url})`;
+            const similarItems = matches.filter(m => m.key !== item.key);
+            const url = await createTelegraphPage(item, similarItems);
+            return `• [${item.label}](${url})`;
           } catch (error) {
-            console.error(`Error creating page for ${item.title}:`, error);
-            return `• ${item.title} (Preview unavailable)`;
+            console.error(`Error creating page for ${item.label}:`, error);
+            return `• ${item.label} (Preview unavailable)`;
           }
         })
       );
@@ -268,7 +259,7 @@ export function studySearch() {
         ...results.map(result => 
           result.status === 'fulfilled' ? result.value : '• (Error loading material)'
         ),
-        `\n📌 All links open in new tabs for easy access.`
+        `\n📌 All links will open in Telegram to access the materials.`
       ].join('\n');
 
       await ctx.reply(response, { 
