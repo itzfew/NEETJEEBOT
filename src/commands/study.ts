@@ -3,7 +3,7 @@ import material from '../../data/material.json';
 
 interface MaterialItem {
   title: string;
-  tags: string[];
+  link: string;
 }
 
 let accessToken: string | null = null;
@@ -19,11 +19,10 @@ function matchMaterial(query: string): MaterialItem[] {
   const results: MaterialItem[] = [];
 
   for (const item of material as MaterialItem[]) {
-    const allText = (item.title + ' ' + item.tags.join(' ')).toLowerCase();
+    const allText = item.title.toLowerCase();
     for (const key of keywords) {
       if (
         allText.includes(key) ||
-        item.tags.some(tag => tag.includes(key)) ||
         similarity(allText, key) > 0.4
       ) {
         results.push(item);
@@ -41,8 +40,8 @@ async function createTelegraphAccount(): Promise<void> {
     method: 'POST',
     body: new URLSearchParams({
       short_name: 'studybot',
-      author_name: 'Study Bot'
-    })
+      author_name: 'Study Bot',
+    }),
   });
 
   const data = await res.json();
@@ -53,18 +52,52 @@ async function createTelegraphAccount(): Promise<void> {
   }
 }
 
+// Default instructions + resource links to add to each page
+const defaultInstructions = `
+Download the study material using the above link.
+
+For detailed instructions, watch: https://youtu.be/example_instructions
+
+Join essential channels and bots for more resources:
+- **@Material_eduhubkmrbot** for NEET, JEE, and other competitive exams.
+- Features include:
+  - Access to study materials for **NEET** and **JEE**
+  - Practice tests for **NEET** and **JEE**
+  - Links to study groups for peer interaction
+  - NCERT solutions and other helpful resources
+
+You can also try [@EduhubKMR_bot](https://t.me/EduhubKMR_bot) – EduhubKMR QuizBot – Practice **NEET Biology**, **Physics** & **Chemistry** with answers and explanations!
+
+More study groups:
+- https://t.me/NEETUG_26
+- https://t.me/Neetpw01
+`;
+
 // Create Telegraph page dynamically with content preview
-export async function createTelegraphPage(title: string, content: string): Promise<string> {
+export async function createTelegraphPage(title: string, link: string): Promise<string> {
   if (!accessToken) await createTelegraphAccount();
+
+  // Build the content array according to Telegraph API format
+  const contentArray = [
+    { tag: 'h2', children: [title] },
+    {
+      tag: 'p',
+      children: [
+        'Download Link: ',
+        { tag: 'a', attrs: { href: link }, children: [link] }
+      ],
+    },
+    { tag: 'p', children: [defaultInstructions] },
+  ];
 
   const res = await fetch('https://api.telegra.ph/createPage', {
     method: 'POST',
     body: new URLSearchParams({
       access_token: accessToken!,
       title,
-      content: JSON.stringify([{ tag: 'p', children: [content] }]),
-      return_content: 'true'
-    })
+      content: JSON.stringify(contentArray),
+      return_content: 'true',
+    }),
   });
 
   const data = await res.json();
@@ -89,9 +122,8 @@ export function studySearch() {
 
     let response = `🔍 *Matched Study Material:*\n\n`;
     for (const item of matches) {
-      const previewText = `Title: ${item.title}\nTags: ${item.tags.join(', ')}`;
       try {
-        const telegraphLink = await createTelegraphPage(item.title, previewText);
+        const telegraphLink = await createTelegraphPage(item.title, item.link);
         response += `• [${item.title}](${telegraphLink})\n`;
       } catch {
         response += `• ${item.title} (Preview unavailable)\n`;
