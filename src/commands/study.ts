@@ -1,4 +1,4 @@
- import { Context } from 'telegraf';
+import { Context } from 'telegraf';
 import material from '../../data/material.json';
 import { fetch } from 'undici';
 
@@ -7,15 +7,13 @@ interface MaterialItem {
   label: string;
   key: string;
   telegramLink: string;
-  shortenedLink: string;
+  shortenedLink: string | null; // Can be null if not shortened yet
 }
 
-// Cache objects
-let materialCache: MaterialItem[] = [];
+// Cache for shortened links to avoid repeated API calls
+const linkCache = new Map<string, string>();
 let accessToken: string | null = null;
 const ADRINO_API_KEY = '5a2539904639474b5f3da41f528199204eb76f65';
-const LINK_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours cache
-const linkCache = new Map<string, { link: string; timestamp: number }>();
 
 // -------------------- Helpers --------------------
 function createTelegramLink(key: string): string {
@@ -24,22 +22,18 @@ function createTelegramLink(key: string): string {
 
 async function shortenLink(link: string, alias: string): Promise<string> {
   // Check cache first
-  const cached = linkCache.get(alias);
-  if (cached && Date.now() - cached.timestamp < LINK_CACHE_TTL) {
-    return cached.link;
+  if (linkCache.has(alias)) {
+    return linkCache.get(alias)!;
   }
 
   try {
     if (alias.length > 30) alias = alias.substring(0, 30);
     const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`;
     const res = await fetch(url);
-    
-    if (!res.ok) throw new Error(`API returned ${res.status}`);
-    
     const data = await res.json();
     
     if (data.status === 'success') {
-      linkCache.set(alias, { link: data.shortenedUrl, timestamp: Date.now() });
+      linkCache.set(alias, data.shortenedUrl);
       return data.shortenedUrl;
     }
     return link;
@@ -57,47 +51,89 @@ function similarity(a: string, b: string): number {
 }
 
 // -------------------- Prepare & Match --------------------
-async function prepareMaterialData(): Promise<MaterialItem[]> {
-  // Return cached data if available
-  if (materialCache.length > 0) return materialCache;
+// Pre-cache all material data on startup
+let materialData: MaterialItem[] = [];
 
+async function initializeMaterialData(): Promise<void> {
   const output: MaterialItem[] = [];
 
   for (const cat of material) {
     for (const item of cat.items) {
       const tgLink = createTelegramLink(item.key);
-      const shortLink = await shortenLink(tgLink, item.key);
       output.push({
         title: cat.title,
         label: item.label,
         key: item.key,
         telegramLink: tgLink,
-        shortenedLink: shortLink,
+        shortenedLink: null, // Will be shortened on demand
       });
     }
   }
 
-  // Cache the prepared data
-  materialCache = output;
-  return output;
+  materialData = output;
 }
 
-async function matchMaterial(query: string): Promise<MaterialItem[]> {
-  const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 0);
-  const all = await prepareMaterialData();
+async function getShortenedLink(item: MaterialItem): Promise<string> {
+  if (item.shortenedLink) return item.shortenedLink;
+  
+  const shortLink = await shortenLink(item.telegramLink, item.key);
+  item.shortenedLink = shortLink; // Update cache
+  return shortLink;
+}
 
-  if (keywords.length === 0) return [];
-
-  return all.filter(item => {
+function matchMaterial(query: string): MaterialItem[] {
+  const keywords = query.toLowerCase().split(/\s+/);
+  
+  return materialData.filter(item => {
     const text = `${item.title} ${item.label}`.toLowerCase();
-    return keywords.some(k => text.includes(k)) || 
-           keywords.every(k => similarity(text, k) > 0.4);
+    return keywords.some(k => text.includes(k) || similarity(text, k) > 0.4);
   });
 }
 
 // -------------------- Telegraph Integration --------------------
 const defaultInstructions = [
-  // ... (keep your existing defaultInstructions)
+  {
+    tag: 'p',
+    children: [
+      '📺 Tutorial: ',
+      {
+        tag: 'a',
+        attrs: { href: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
+        children: ['YouTube Guide'],
+      },
+    ],
+  },
+  {
+    tag: 'p',
+    children: ['📚 Join channels for updates:']
+  },
+  {
+    tag: 'ul',
+    children: [
+      {
+        tag: 'li',
+        children: [
+          {
+            tag: 'a',
+            attrs: { href: 'https://t.me/Material_eduhubkmrbot' },
+            children: ['@Material_eduhubkmrbot'],
+          },
+          ' - Study materials',
+        ],
+      },
+      {
+        tag: 'li',
+        children: [
+          {
+            tag: 'a',
+            attrs: { href: 'https://t.me/EduhubKMR_bot' },
+            children: ['@EduhubKMR_bot'],
+          },
+          ' - QuizBot',
+        ],
+      },
+    ],
+  },
 ];
 
 async function createTelegraphAccount() {
@@ -117,7 +153,7 @@ async function createTelegraphAccount() {
       throw new Error(data.error || 'Telegraph account creation failed');
     }
   } catch (error) {
-    console.error('Telegraph account creation error:', error);
+    console.error('Failed to create Telegraph account:', error);
     throw error;
   }
 }
@@ -127,8 +163,48 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
     await createTelegraphAccount();
   }
 
+  // Get all shortened links in parallel
+  const links = await Promise.all(
+    matches.map(item => getShortenedLink(item))
+  );
+
   const content = [
-    // ... (keep your existing content structure)
+    {
+      tag: 'h3',
+      children: [`Results for: "${query}"`]
+    },
+    {
+      tag: 'p',
+      children: [`Found ${matches.length} study materials:`]
+    },
+    {
+      tag: 'ul',
+      children: matches.map((item, index) => ({
+        tag: 'li',
+        children: [
+          '• ',
+          {
+            tag: 'a',
+            attrs: { href: links[index], target: '_blank' },
+            children: [item.label],
+          },
+          ` (${item.title})`,
+        ],
+      })),
+    },
+    {
+      tag: 'hr'
+    },
+    {
+      tag: 'h4',
+      children: ['ℹ️ Resources & Instructions']
+    },
+    ...defaultInstructions,
+    {
+      tag: 'p',
+      attrs: { style: 'color: gray; font-size: 0.8em' },
+      children: ['Generated by Study Bot'],
+    },
   ];
 
   try {
@@ -147,35 +223,44 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
     if (data.ok) return `https://telegra.ph/${data.result.path}`;
     throw new Error(data.error || 'Page creation failed');
   } catch (error) {
-    console.error('Telegraph page creation error:', error);
+    console.error('Failed to create Telegraph page:', error);
     throw error;
   }
 }
 
 // -------------------- Bot Command Handler --------------------
-export function studySearch() {
-  // Initialize material data on startup
-  prepareMaterialData().catch(console.error);
+// Initialize material data when the bot starts
+initializeMaterialData().catch(console.error);
 
+export function studySearch() {
   return async (ctx: Context) => {
     try {
+      // Ensure we're handling a text message
       if (!ctx.message || !('text' in ctx.message)) return;
 
       const query = ctx.message.text.trim();
-      if (!query) return ctx.reply('❌ Please enter a search term.');
+      if (!query) {
+        await ctx.reply('❌ Please enter a search term.', {
+          reply_to_message_id: ctx.message.message_id
+        });
+        return;
+      }
 
       const mention = ctx.chat?.type?.includes('group') && ctx.from?.username 
         ? `@${ctx.from.username}` 
         : ctx.from?.first_name || '';
 
-      const matches = await matchMaterial(query);
+      // Perform search
+      const matches = matchMaterial(query);
       if (matches.length === 0) {
-        return ctx.reply(
+        await ctx.reply(
           `❌ ${mention}, no materials found for "${query}".`,
           { reply_to_message_id: ctx.message.message_id }
         );
+        return;
       }
 
+      // Create and send results
       const url = await createTelegraphPageForMatches(query, matches);
       const shortQuery = query.split(/\s+/).slice(0, 3).join(' ');
       
@@ -187,9 +272,16 @@ export function studySearch() {
           reply_to_message_id: ctx.message.message_id,
         }
       );
+
     } catch (error) {
       console.error('Study search error:', error);
-      await ctx.reply('❌ Something went wrong. Please try again later.');
+      try {
+        await ctx.reply('❌ Something went wrong. Please try again later.', {
+          reply_to_message_id: ctx.message?.message_id
+        });
+      } catch (e) {
+        console.error('Failed to send error message:', e);
+      }
     }
   };
 }
