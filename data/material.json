@@ -1,10 +1,10 @@
 [
   {
     "title": "Biology Hacking Guide",
-    "tags": ["bio", "hacking", "parthgoyal"]
+    "link": "https://example.com/biology-hacking-guide.pdf"
   },
   {
     "title": "Physics Mind Map",
-    "tags": ["physics", "map", "revision"]
+    "link": "https://example.com/physics-mind-map.pdf"
   }
 ]
