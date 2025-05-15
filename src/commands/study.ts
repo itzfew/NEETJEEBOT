@@ -20,14 +20,10 @@ function createTelegramLink(key: string): string {
 
 async function shortenLink(link: string, alias: string): Promise<string> {
   try {
-    if (alias.length > 30) {
-      alias = alias.substring(0, 30);
-    }
-
+    if (alias.length > 30) alias = alias.substring(0, 30);
     const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`;
     const res = await fetch(url);
     const data = await res.json();
-
     return data.status === 'success' ? data.shortenedUrl : link;
   } catch (e) {
     console.error('Shorten failed:', e);
@@ -60,7 +56,6 @@ async function prepareMaterialData(): Promise<MaterialItem[]> {
     }
   }
 
-  console.log(`Prepared ${output.length} material items.`);
   return output;
 }
 
@@ -68,13 +63,10 @@ async function matchMaterial(query: string): Promise<MaterialItem[]> {
   const keywords = query.toLowerCase().split(/\s+/);
   const all = await prepareMaterialData();
 
-  const filtered = all.filter(item => {
+  return all.filter(item => {
     const text = `${item.title} ${item.label}`.toLowerCase();
     return keywords.some(k => text.includes(k) || similarity(text, k) > 0.4);
   });
-
-  console.log(`Matched ${filtered.length} items for "${query}"`);
-  return filtered;
 }
 
 // -------------------- Telegraph Integration --------------------
@@ -90,7 +82,10 @@ const defaultInstructions = [
       },
     ],
   },
-  { tag: 'p', children: ['📚 Join channels for updates:'] },
+  {
+    tag: 'p',
+    children: ['📚 Join channels for updates:']
+  },
   {
     tag: 'ul',
     children: [
@@ -141,8 +136,14 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
   if (!accessToken) await createTelegraphAccount();
 
   const content = [
-    { tag: 'h3', children: [`Results for: "${query}"`] },
-    { tag: 'p', children: [`Found ${matches.length} study materials:`] },
+    {
+      tag: 'h3',
+      children: [`Results for: "${query}"`]
+    },
+    {
+      tag: 'p',
+      children: [`Found ${matches.length} study materials:`]
+    },
     {
       tag: 'ul',
       children: matches.map(item => ({
@@ -158,8 +159,13 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
         ],
       })),
     },
-    { tag: 'hr' },
-    { tag: 'h4', children: ['ℹ️ Resources & Instructions'] },
+    {
+      tag: 'hr'
+    },
+    {
+      tag: 'h4',
+      children: ['ℹ️ Resources & Instructions']
+    },
     ...defaultInstructions,
     {
       tag: 'p',
@@ -180,10 +186,8 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
   });
 
   const data = await res.json();
-  console.log('Telegraph response:', data);
-
   if (data.ok) return `https://telegra.ph/${data.result.path}`;
-  else throw new Error(data.error || 'Page creation failed');
+  throw new Error(data.error || 'Page creation failed');
 }
 
 // -------------------- Bot Command Handler --------------------
@@ -193,51 +197,31 @@ export function studySearch() {
       if (!ctx.message || !('text' in ctx.message)) return;
 
       const query = ctx.message.text.trim();
+      if (!query) return ctx.reply('❌ Please enter a search term.');
 
-      // Ignore known bot logs or non-search phrases
-      const ignoreQueries = [
-        'running bot in production mode',
-        'bot running in production mode',
-        'start',
-        '/start',
-        'help',
-        '/help',
-      ];
-
-      if (!query || ignoreQueries.includes(query.toLowerCase())) {
-        return ctx.reply('❌ Please enter a valid search term.');
-      }
-
-      const mention =
-        ctx.chat?.type?.includes('group') && ctx.from?.username
-          ? `@${ctx.from.username}`
-          : ctx.from?.first_name || '';
-
-      // Send searching message
-      const loadingMsg = await ctx.reply(`⏳ Searching study materials for "${query}"...`, {
-        reply_to_message_id: ctx.message.message_id,
-      });
+      const mention = ctx.chat?.type?.includes('group') && ctx.from?.username 
+        ? `@${ctx.from.username}` 
+        : ctx.from?.first_name || '';
 
       const matches = await matchMaterial(query);
-
       if (matches.length === 0) {
-        await ctx.deleteMessage(loadingMsg.message_id);
-        return ctx.reply(`❌ ${mention}, no materials found for "${query}". Try different keywords.`, {
-          reply_to_message_id: ctx.message.message_id,
-        });
+        return ctx.reply(
+          `❌ ${mention}, no materials found for "${query}".`,
+          { reply_to_message_id: ctx.message.message_id }
+        );
       }
 
       const url = await createTelegraphPageForMatches(query, matches);
-      await ctx.deleteMessage(loadingMsg.message_id);
-
       const shortQuery = query.split(/\s+/).slice(0, 3).join(' ');
-      const response = `🔍 ${mention}, found *${matches.length}* matches for *${shortQuery}*:\n[Click here to view materials](${url})`;
-
-      await ctx.reply(response, {
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true,
-        reply_to_message_id: ctx.message.message_id,
-      });
+      
+      await ctx.reply(
+        `🔍 ${mention}, found *${matches.length}* matches for *${shortQuery}*:\n[View materials](${url})`,
+        {
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true,
+          reply_to_message_id: ctx.message.message_id,
+        }
+      );
     } catch (error) {
       console.error('Study search error:', error);
       await ctx.reply('❌ Something went wrong. Please try again later.');
