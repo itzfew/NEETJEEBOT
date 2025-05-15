@@ -8,33 +8,131 @@ interface MaterialItem {
 
 let accessToken: string | null = null;
 
-// Simple similarity function (you can improve if needed)
+// Improved similarity function
 function similarity(a: string, b: string): number {
-  const common = a.split('').filter(char => b.includes(char)).length;
-  return common / Math.max(a.length, b.length);
+  const setA = new Set(a.toLowerCase().split(''));
+  const setB = new Set(b.toLowerCase().split(''));
+  const intersection = new Set([...setA].filter(char => setB.has(char)));
+  return intersection.size / Math.max(setA.size, setB.size);
 }
 
 function matchMaterial(query: string): MaterialItem[] {
-  const keywords = query.toLowerCase().split(/\s+/);
+  const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
   const results: MaterialItem[] = [];
 
   for (const item of material as MaterialItem[]) {
-    const allText = item.title.toLowerCase();
-    for (const key of keywords) {
-      if (
-        allText.includes(key) ||
-        similarity(allText, key) > 0.4
-      ) {
-        results.push(item);
-        break;
-      }
+    const itemTitle = item.title.toLowerCase();
+    const matchesKeyword = keywords.some(key => 
+      itemTitle.includes(key) || similarity(itemTitle, key) > 0.4
+    );
+    
+    if (matchesKeyword) {
+      results.push(item);
     }
   }
 
   return results;
 }
 
-// Create Telegraph account if not created
+// Default instructions (simplified for Telegraph)
+const defaultInstructions = [
+  "📚 Download the study material using the link above.",
+  "🎥 For detailed instructions, watch: [YouTube Tutorial](https://youtube.com)",
+  "",
+  "Join these channels for more resources:",
+  "- @Material_eduhubkmrbot (NEET/JEE materials)",
+  "- @EduhubKMR_bot (QuizBot for NEET subjects)",
+  "",
+  "Study groups:",
+  "- NEETUG_26",
+  "- Neetpw01"
+].join("\n");
+
+export async function createTelegraphPage(title: string, link: string, matches: MaterialItem[]): Promise<string> {
+  if (!accessToken) {
+    await createTelegraphAccount();
+  }
+
+  // Prepare content array for Telegraph API
+  const contentArray = [
+    // Header with title
+    { tag: 'h3', children: [title] },
+    
+    // Download link section
+    { 
+      tag: 'p', 
+      children: [
+        '📥 ',
+        { 
+          tag: 'strong', 
+          children: ['Download: '] 
+        },
+        { 
+          tag: 'a', 
+          attrs: { href: link }, 
+          children: ['Click here'] 
+        }
+      ] 
+    },
+    
+    // Matched results section (only if there are matches)
+    ...(matches.length > 0 ? [
+      { 
+        tag: 'hr' 
+      },
+      { 
+        tag: 'h4', 
+        children: ['🔍 Similar Study Materials'] 
+      },
+      { 
+        tag: 'ul', 
+        children: matches.map(item => ({
+          tag: 'li',
+          children: [
+            '• ',
+            { 
+              tag: 'a', 
+              attrs: { href: item.link }, 
+              children: [item.title] 
+            }
+          ]
+        }))
+      }
+    ] : []),
+    
+    // Instructions section
+    { 
+      tag: 'hr' 
+    },
+    { 
+      tag: 'h4', 
+      children: ['ℹ️ Resources & Instructions'] 
+    },
+    { 
+      tag: 'p', 
+      children: [defaultInstructions] 
+    }
+  ];
+
+  const res = await fetch('https://api.telegra.ph/createPage', {
+    method: 'POST',
+    body: new URLSearchParams({
+      access_token: accessToken!,
+      title: `Study Material: ${title}`,
+      author_name: 'Study Bot',
+      content: JSON.stringify(contentArray),
+      return_content: 'true'
+    }),
+  });
+
+  const data = await res.json();
+  if (data.ok) {
+    return `https://telegra.ph/${data.result.path}`;
+  } else {
+    throw new Error(data.error || 'Failed to create Telegraph page');
+  }
+}
+
 async function createTelegraphAccount(): Promise<void> {
   const res = await fetch('https://api.telegra.ph/createAccount', {
     method: 'POST',
@@ -48,108 +146,57 @@ async function createTelegraphAccount(): Promise<void> {
   if (data.ok) {
     accessToken = data.result.access_token;
   } else {
-    throw new Error('Failed to create Telegraph account');
-  }
-}
-
-// Default instructions + resource links to add to each page
-const defaultInstructions = `
-<div style="border:1px solid #ccc; padding:10px; border-radius:5px; margin-top:10px;">
-  <p>Download the study material using the above link.</p>
-  <p>For detailed instructions, watch: <a href="https://youtu.be/example_instructions" target="_blank" rel="noopener">YouTube Tutorial</a></p>
-  <p><b>Join essential channels and bots for more resources:</b></p>
-  <ul>
-    <li><a href="https://t.me/Material_eduhubkmrbot" target="_blank" rel="noopener">@Material_eduhubkmrbot</a> for NEET, JEE, and other competitive exams.</li>
-  </ul>
-  <p><b>Features include:</b></p>
-  <ul>
-    <li>Access to study materials for <b>NEET</b> and <b>JEE</b></li>
-    <li>Practice tests for <b>NEET</b> and <b>JEE</b></li>
-    <li>Links to study groups for peer interaction</li>
-    <li>NCERT solutions and other helpful resources</li>
-  </ul>
-  <p>You can also try <a href="https://t.me/EduhubKMR_bot" target="_blank" rel="noopener">@EduhubKMR_bot</a> – EduhubKMR QuizBot – Practice NEET Biology, Physics & Chemistry with answers and explanations!</p>
-  <p><b>More study groups:</b></p>
-  <ul>
-    <li><a href="https://t.me/NEETUG_26" target="_blank" rel="noopener">NEETUG_26</a></li>
-    <li><a href="https://t.me/Neetpw01" target="_blank" rel="noopener">Neetpw01</a></li>
-  </ul>
-</div>
-`;
-
-// And update createTelegraphPage content to wrap matched results in a bordered div with arrows:
-
-export async function createTelegraphPage(title: string, link: string): Promise<string> {
-  if (!accessToken) await createTelegraphAccount();
-
-  const contentArray = [
-    { tag: 'h2', children: [title] },
-    {
-      tag: 'p',
-      children: [
-        'Download Link: ',
-        { tag: 'a', attrs: { href: link, target: '_blank', rel: 'noopener' }, children: [link] },
-      ],
-    },
-    { tag: 'div', attrs: { style: 'border:1px solid #ccc; padding:10px; border-radius:5px; margin-top:10px;' }, children: [
-      { tag: 'p', children: ['🔍 Matched Study Material List:'] },
-      { tag: 'ul', children: material.map(item => ({
-          tag: 'li',
-          children: [
-            '➥ ',
-            { tag: 'a', attrs: { href: item.link, target: '_blank', rel: 'noopener' }, children: [item.title] }
-          ]
-      })) },
-    ]},
-    { tag: 'div', attrs: { style: 'margin-top:15px;' }, children: [
-      { tag: 'p', children: ['Instructions and Resources:'] },
-      { tag: 'raw', children: [defaultInstructions] } // raw to insert HTML string directly if supported; else parse tags
-    ]}
-  ];
-
-  // Note: If Telegraph API does not support 'raw', you have to convert defaultInstructions string to tag objects.
-  // Or you can send defaultInstructions as plain paragraph array with links.
-
-  const res = await fetch('https://api.telegra.ph/createPage', {
-    method: 'POST',
-    body: new URLSearchParams({
-      access_token: accessToken!,
-      title,
-      content: JSON.stringify(contentArray),
-      return_content: 'true',
-    }),
-  });
-
-  const data = await res.json();
-  if (data.ok) {
-    return `https://telegra.ph/${data.result.path}`;
-  } else {
-    throw new Error('Failed to create Telegraph page');
+    throw new Error(data.error || 'Failed to create Telegraph account');
   }
 }
 
 export function studySearch() {
   return async (ctx: Context) => {
-    if (!ctx.message || typeof ctx.message.text !== 'string') {
-      return ctx.reply('❌ Please send a text message to search study material.');
-    }
-
-    const text = ctx.message.text;
-    const matches = matchMaterial(text);
-    if (matches.length === 0) {
-      return ctx.reply('❌ No matching study material found.');
-    }
-
-    let response = `🔍 *Matched Study Material:*\n\n`;
-    for (const item of matches) {
-      try {
-        const telegraphLink = await createTelegraphPage(item.title, item.link);
-        response += `• [${item.title}](${telegraphLink})\n`;
-      } catch {
-        response += `• ${item.title} (Preview unavailable)\n`;
+    try {
+      if (!ctx.message || !('text' in ctx.message)) {
+        return ctx.reply('❌ Please send a text message to search study material.');
       }
-    }
 
-    await ctx.reply(response, { parse_mode: 'Markdown' });
+      const query = ctx.message.text.trim();
+      if (!query) {
+        return ctx.reply('❌ Please enter a search term.');
+      }
+
+      const matches = matchMaterial(query);
+      if (matches.length === 0) {
+        return ctx.reply('❌ No matching study material found.');
+      }
+
+      // Create Telegraph pages for each match
+      const results = await Promise.allSettled(
+        matches.map(async item => {
+          try {
+            // Pass only the current item's matches (excluding itself)
+            const similarItems = matches.filter(m => m.title !== item.title);
+            const url = await createTelegraphPage(item.title, item.link, similarItems);
+            return `• [${item.title}](${url})`;
+          } catch (error) {
+            console.error(`Error creating page for ${item.title}:`, error);
+            return `• ${item.title} (Preview unavailable)`;
+          }
+        })
+      );
+
+      const response = [
+        `🔍 *Found ${matches.length} study materials:*`,
+        ...results.map(result => 
+          result.status === 'fulfilled' ? result.value : '• (Error loading material)'
+        )
+      ].join('\n');
+
+      await ctx.reply(response, { 
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+
+    } catch (error) {
+      console.error('Error in studySearch:', error);
+      ctx.reply('❌ An error occurred while processing your request.');
+    }
   };
 }
