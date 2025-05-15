@@ -91,7 +91,7 @@ export function studySearch() {
     const query = ctx.message?.text || '';
     
     if (!query) {
-      return ctx.reply('Please type what materials you need\nExample: "mujhe MTG physics ki books chahiye"');
+      return ctx.reply('Please type what materials you need\nExample: "MTG BOOKS"');
     }
 
     const matches = searchMaterials(query);
