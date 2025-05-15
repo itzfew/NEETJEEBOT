@@ -20,18 +20,19 @@ function createTelegramLink(key: string): string {
 
 async function shortenLink(link: string, alias: string): Promise<string> {
   try {
-    const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`;
+    let safeAlias = alias.replace(/[^a-zA-Z0-9-_]/g, '');
+
+    // Repeatedly cut to half until length ≤ 30
+    while (safeAlias.length > 30) {
+      safeAlias = safeAlias.slice(0, Math.ceil(safeAlias.length / 2));
+    }
+
+    const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${safeAlias}`;
     const res = await fetch(url);
     const data = await res.json();
-
-    if (data.status === 'success') {
-      return data.shortenedUrl;
-    } else {
-      console.warn(`Adrino failed for ${alias}:`, data);
-      return link;
-    }
+    return data.status === 'success' ? data.shortenedUrl : link;
   } catch (e) {
-    console.error(`Adrino error for ${alias}:`, e);
+    console.error('Shorten failed:', e);
     return link;
   }
 }
