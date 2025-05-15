@@ -7,6 +7,7 @@
   "homepage": "https://github.com/itzfew/eduhub-bot",
   "dependencies": {
     "@vercel/node": "^3.2.24",
+    "dotenv-cli": "^7.4.2",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
@@ -14,7 +15,6 @@
     "@types/node": "^22.8.6",
     "@vercel/ncc": "^0.38.2",
     "debug": "^4.3.7",
-    "dotenv-cli": "^7.4.2",
     "nodemon": "^3.1.7",
     "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
@@ -24,7 +24,6 @@
     "dev": "DEBUG=bot* dotenv -- nodemon -e ts -x ts-node src/index.ts",
     "devWindows": "@powershell -Command $env:DEBUG='bot*';dotenv -- -- nodemon -e ts -x ts-node src/index.ts",
     "build": "ncc build src/index.ts -o public -m",
-    "vercel-build": "yarn build",
     "prettier": "prettier --write 'src/**/*.ts'",
     "lint": "tsc --noemit"
   }
