@@ -28,9 +28,10 @@
     "typescript": "^5.6.3"
   },
   "scripts": {
-    "dev": "DEBUG=bot* dotenv -- nodemon -e ts -x ts-node src/index.ts",
-    "devWindows": "@powershell -Command $env:DEBUG='bot*';dotenv -- nodemon -e ts -x ts-node src/index.ts",
-    "build": "ncc build src/index.ts -o public -m",
+    "dev": "DEBUG=bot* dotenv -e .env -- yarn ts-node src/index.ts",
+    "dev:watch": "DEBUG=bot* dotenv -e .env -- nodemon -e ts -x yarn ts-node src/index.ts",
+    "devWindows": "@powershell -Command $env:DEBUG='bot*'; dotenv -e .env -- nodemon -e ts -x yarn ts-node src/index.ts",
+    "build": "yarn ncc build src/index.ts -o public -m",
     "prettier": "prettier --write 'src/**/*.ts'",
     "lint": "tsc --noemit",
     "start": "node public/index.js",
@@ -38,5 +39,6 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "packageManager": "yarn@3.6.4"
 }
