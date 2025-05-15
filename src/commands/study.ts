@@ -1,6 +1,6 @@
 import { Context } from 'telegraf';
 import material from '../../data/material.json';
-import fetch from 'node-fetch'; // Required for Vercel (Node < 18)
+import { fetch } from 'undici';
 
 interface MaterialItem {
   title: string;
