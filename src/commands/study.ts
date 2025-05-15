@@ -127,25 +127,34 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
 export function studySearch() {
   return async (ctx: Context) => {
     try {
-      if (!ctx.message || !('text' in ctx.message)) {
-        return ctx.reply('❌ Please send a text to search study materials.');
-      }
+      if (!ctx.message || !('text' in ctx.message)) return;
 
       const query = ctx.message.text.trim();
       if (!query) {
         return ctx.reply('❌ Please enter a search term.');
       }
 
+      // Reply fast: "Searching..."
+      const mention = ctx.chat?.type.endsWith('group') && ctx.from?.username
+        ? `@${ctx.from.username}`
+        : ctx.from?.first_name || '';
+
+      await ctx.reply(`⏳ Searching study materials for "${query}"...`);
+
       const matches = await matchMaterial(query);
       if (matches.length === 0) {
-        return ctx.reply('❌ No matching materials found. Try different keywords.');
+        return ctx.reply(`❌ ${mention}, no matching materials found for "${query}". Try different keywords.`);
       }
 
       const url = await createTelegraphPageForMatches(query, matches);
 
-      await ctx.reply(`🔍 [View ${matches.length} matched study materials](${url})`, {
+      const capitalQuery = query.split(/\s+/).slice(0, 3).join(' ');
+      const responseMsg = `🔍 ${mention}, view ${matches.length} matched for *${capitalQuery}*:\n[Click here to view study materials](${url})`;
+
+      await ctx.reply(responseMsg, {
         parse_mode: 'Markdown',
-        disable_web_page_preview: true
+        disable_web_page_preview: true,
+        reply_to_message_id: ctx.message.message_id
       });
 
     } catch (error) {
