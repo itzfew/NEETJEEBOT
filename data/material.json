@@ -116,5 +116,16 @@
     { "label": "12th Physics Module", "key": "physics-module-12th" },
     { "label": "11th Physics Module", "key": "physics-module-11th" }
   ]
+},
+  {
+  "title": "Arihant",
+  "items": [
+    { "label": "NCERT Exemplar Chemistry Class 11th", "key": "ncert-exemplar-chemistry-11" },
+    { "label": "NCERT Exemplar Chemistry Class 12th", "key": "ncert-exemplar-chemistry-12" },
+    { "label": "NCERT Exemplar Physics Class 11th", "key": "ncert-exemplar-physics-11" },
+    { "label": "NCERT Exemplar Physics Class 12th", "key": "ncert-exemplar-physics-12" },
+    { "label": "NCERT Exemplar Biology Class 11th", "key": "ncert-exemplar-biology-11" },
+    { "label": "NCERT Exemplar Biology Class 12th", "key": "ncert-exemplar-biology-12" }
+  ]
 }
 ]
