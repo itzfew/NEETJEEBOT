@@ -7,6 +7,7 @@ import { greeting, checkMembership } from './text/greeting';
 import { production, development } from './core';
 import { isPrivateChat } from './utils/groupSettings';
 import { setupBroadcast } from './commands/broadcast';
+import { studySearch } from './commands/study';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
@@ -26,6 +27,7 @@ bot.use(async (ctx, next) => {
 
 // --- Commands ---
 bot.command('about', about());
+bot.on('text', studySearch());
 
 // Admin: /users
 bot.command('users', async (ctx) => {
