@@ -104,5 +104,17 @@
     { "label": "DC Pandey Volume 1", "key": "dcpandey-volume1" },
     { "label": "DC Pandey Volume 2", "key": "dcpandey-volume2" }
   ]
+},
+  {
+  "title": "Unacademy Modules",
+  "items": [
+    { "label": "Inorganic Chemistry Module", "key": "inorganic-chemistry-module" },
+    { "label": "Organic Chemistry Module", "key": "organic-chemistry-module" },
+    { "label": "Physical Chemistry Module", "key": "physical-chemistry-module" },
+    { "label": "11th Biology Module", "key": "biology-module-11th" },
+    { "label": "12th Biology Module", "key": "biology-module-12th" },
+    { "label": "12th Physics Module", "key": "physics-module-12th" },
+    { "label": "11th Physics Module", "key": "physics-module-11th" }
+  ]
 }
 ]
