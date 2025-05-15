@@ -127,5 +127,21 @@
     { "label": "NCERT Exemplar Biology Class 11th", "key": "ncert-exemplar-biology-11" },
     { "label": "NCERT Exemplar Biology Class 12th", "key": "ncert-exemplar-biology-12" }
   ]
+},
+  {
+  "title": "Word to Word Series",
+  "items": [
+    { "label": "Organic Chemistry Word to Word", "key": "organic-chemistry-word-to-word" },
+    { "label": "Biology Word to Word", "key": "biology-word-to-word" },
+    { "label": "Inorganic Chemistry Word to Word", "key": "inorganic-chemistry-word-to-word" }
+  ]
+},
+  {
+  "title": "Arihant Handbooks",
+  "items": [
+    { "label": "Arihant Physics Handbook", "key": "arihant-physics-handbook" },
+    { "label": "Arihant Mathematics Handbook", "key": "arihant-mathematics-handbook" },
+    { "label": "Arihant Chemistry Handbook", "key": "arihant-chemistry-handbook" }
+  ]
 }
 ]
