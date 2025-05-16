@@ -151,7 +151,7 @@
   ]
 },
   {
-  "title": "Video Modules",
+  "title": "Modules In Zip File",
   "items": [
     { "label": "AKASH Modules", "key": "akash-modules" },
     { "label": "ALLEN Modules", "key": "allen-modules" }
