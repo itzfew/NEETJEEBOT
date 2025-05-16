@@ -193,5 +193,14 @@
     { "label": "Arihant Physics PYQ", "key": "arihant-pyq-physics" },
     { "label": "Arihant Chemistry PYQ", "key": "arihant-pyq-chemistry" }
   ]
+},
+  {
+  "title": "Allen Handbooks",
+  "items": [
+    { "label": "Allen Physics Handbook", "key": "allen-physics-handbook" },
+    { "label": "Allen Chemistry Handbook", "key": "allen-chemistry-handbook" },
+    { "label": "Allen Biology Handbook", "key": "allen-biology-handbook" },
+    { "label": "Allen Maths Handbook", "key": "allen-maths-handbook" }
+  ]
 }
 ]
