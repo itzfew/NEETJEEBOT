@@ -149,5 +149,12 @@
   "items": [
     { "label": "10 Full Syllabus Mock Tests by Dr. Anand Mani", "key": "10-full-syllabus-mock-anand" }
   ]
+},
+  {
+  "title": "Video Modules",
+  "items": [
+    { "label": "AKASH Modules", "key": "akash-modules" },
+    { "label": "ALLEN Modules", "key": "allen-modules" }
+  ]
 }
 ]
