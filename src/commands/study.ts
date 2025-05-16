@@ -95,17 +95,17 @@ const defaultInstructions = [
   {
     tag: 'p',
     children: [
-      '📺 Tutorial: ',
+      '📺 How to open link: ',
       {
         tag: 'a',
-        attrs: { href: 'https://youtube.com/watch?v=dQw4w9WgXcQ' },
+        attrs: { href: 'https://youtu.be/S912R5lMShI?si=l5RsBbkbXaxFowbZ' },
         children: ['YouTube Guide'],
       },
     ],
   },
   {
     tag: 'p',
-    children: ['📚 Join channels for updates:']
+    children: ['📚 Join more recommended bots:']
   },
   {
     tag: 'ul',
@@ -121,6 +121,7 @@ const defaultInstructions = [
           ' - Study materials',
         ],
       },
+      
       {
         tag: 'li',
         children: [
@@ -132,6 +133,29 @@ const defaultInstructions = [
           ' - QuizBot',
         ],
       },
+            {
+        tag: 'li',
+        children: [
+          {
+            tag: 'a',
+            attrs: { href: 'https://t.me/NEETPW01' },
+            children: ['@NEETPW01'],
+          },
+          ' - Group For Discussion',
+        ],
+      },
+            {
+        tag: 'li',
+        children: [
+          {
+            tag: 'a',
+            attrs: { href: 'https://t.me/NEETUG_26' },
+            children: ['@NEETUG_26'],
+          },
+          ' - NEET JEE Channel',
+        ],
+      },
+      
     ],
   },
 ];
