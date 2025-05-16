@@ -156,5 +156,42 @@
     { "label": "AKASH Modules", "key": "akash-modules" },
     { "label": "ALLEN Modules", "key": "allen-modules" }
   ]
+},
+  {
+  "title": "Allen PYQ",
+  "items": [
+    { "label": "Allen 11 Years PYQs", "key": "allen-11-years-pyq" }
+  ]
+},
+{
+  "title": "NCERT Punch Series",
+  "items": [
+    { "label": "NCERT Punch Biology", "key": "ncert-punch-biology" },
+    { "label": "NCERT Punch Chemistry", "key": "ncert-punch-chemistry" },
+    { "label": "NCERT Punch Physics", "key": "ncert-punch-physics" }
+  ]
+},
+{
+  "title": "Competishun JEE MAINS PYQ",
+  "items": [
+    { "label": "Competishun JEE MAINS Maths 5 Years PYQ", "key": "competishun-jee-maths-5yr-pyq" },
+    { "label": "Competishun JEE MAINS Chemistry 5 Years PYQ", "key": "competishun-jee-chemistry-5yr-pyq" },
+    { "label": "Competishun JEE MAINS Physics 5 Years PYQ", "key": "competishun-jee-physics-5yr-pyq" }
+  ]
+},
+{
+  "title": "33 Years NEET PYQ",
+  "items": [
+    { "label": "PW PYQs Physics 11th", "key": "pw-pyq-physics-11" },
+    { "label": "PW PYQs Physics 12th", "key": "pw-pyq-physics-12" },
+    { "label": "PW PYQs Organic Chemistry", "key": "pw-pyq-organic-chemistry" },
+    { "label": "PW PYQs Inorganic Chemistry", "key": "pw-pyq-inorganic-chemistry" },
+    { "label": "PW PYQs Physical Chemistry", "key": "pw-pyq-physical-chemistry" },
+    { "label": "PW PYQs Biology 11th", "key": "pw-pyq-biology-11" },
+    { "label": "PW PYQs Biology 12th", "key": "pw-pyq-biology-12" },
+    { "label": "Arihant Biology PYQ", "key": "arihant-pyq-biology" },
+    { "label": "Arihant Physics PYQ", "key": "arihant-pyq-physics" },
+    { "label": "Arihant Chemistry PYQ", "key": "arihant-pyq-chemistry" }
+  ]
 }
 ]
