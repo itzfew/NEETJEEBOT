@@ -106,21 +106,17 @@ bot.on('text', async (ctx, next) => {
 });
 
 bot.on('new_chat_members', async (ctx) => {
-  const groupName = ctx.chat?.title || 'this group';
-
-  // Try deleting the system-generated "user joined" message
+  // Delete Telegram's default join message
   try {
     await ctx.deleteMessage();
   } catch (err) {
-    console.warn('Could not delete system join message:', err);
+    console.warn('Join message not deleted:', err);
   }
 
   for (const member of ctx.message.new_chat_members) {
-    const isBot = member.username === ctx.botInfo.username;
-
-    if (isBot) {
+    if (member.username === ctx.botInfo.username) {
       await ctx.reply(
-        `*Thanks for adding me!*\n\n_Mention me like_ *@${BOT_USERNAME}* _with a study keyword (e.g.,_ \`mtg bio\` _) to get materials._`,
+        `*Thanks for adding me!*\n\n_Type *@${BOT_USERNAME} mtg bio* to get study materials._`,
         { parse_mode: 'Markdown' }
       );
       continue;
@@ -128,7 +124,7 @@ bot.on('new_chat_members', async (ctx) => {
 
     const name = member.first_name || 'there';
     await ctx.reply(
-      `*Hey there ${name}, welcome to* _${groupName}_!\n\nYou can now *ask for study material* — just type for example:\n\n*@${BOT_USERNAME} mtg Neet pyq book*`,
+      `*Hi ${name}!* Ask for study material by typing:\n*@${BOT_USERNAME} mtg bio*`,
       { parse_mode: 'Markdown' }
     );
   }
