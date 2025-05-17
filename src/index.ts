@@ -21,7 +21,7 @@ const bot = new Telegraf(BOT_TOKEN);
 
 // --- Middleware: Group membership restriction ---
 bot.use(async (ctx, next) => {
-  if (ctx.chat && isPrivateChat(ctx.chat.type)) {
+  if (ctx.chat && !isPrivateChat(ctx.chat.type)) {
     const isAllowed = await checkMembership(ctx);
     if (!isAllowed) return;
   }
@@ -34,17 +34,53 @@ bot.command('about', async (ctx) => {
   await about()(ctx);
 });
 
-// --- /logs command (admin only) ---
+// --- /logs command (admin only) with optional date filter ---
+// Usage examples:
+//   /logs          => last 50 logs (default)
+//   /logs 7        => last 7 days logs
+//   /logs 2025-05-01 2025-05-10  => logs between those dates
 bot.command('logs', async (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return;
+  if (ctx.from?.id !== ADMIN_ID) return;
 
   try {
     const logs = await getLogsFromSheet();
-    const latest = logs.slice(-10).reverse().map(
-      (log) => `• [${log.username || 'N/A'}]: ${log.message}`
+
+    if (!logs.length) return ctx.reply('No logs found.');
+
+    // Parse args
+    const args = ctx.message?.text?.split(' ').slice(1) || [];
+    let filteredLogs = logs;
+
+    if (args.length === 1) {
+      // Last X days
+      const days = parseInt(args[0]);
+      if (!isNaN(days) && days > 0) {
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        filteredLogs = logs.filter(log => {
+          const logTime = new Date(log.timestamp).getTime();
+          return logTime >= cutoff;
+        });
+      }
+    } else if (args.length === 2) {
+      // Date range YYYY-MM-DD YYYY-MM-DD
+      const startDate = new Date(args[0]);
+      const endDate = new Date(args[1]);
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        filteredLogs = logs.filter(log => {
+          const logTime = new Date(log.timestamp).getTime();
+          return logTime >= startDate.getTime() && logTime <= endDate.getTime();
+        });
+      }
+    }
+
+    // Limit max logs to 50 for readability
+    filteredLogs = filteredLogs.slice(-50).reverse();
+
+    const formatted = filteredLogs.map(log =>
+      `• [${log.username || 'N/A'}]: ${log.message}`
     ).join('\n');
 
-    await ctx.reply(`🗂 Latest Messages:\n\n${latest || 'No logs found.'}`);
+    await ctx.reply(`🗂 Logs:\n\n${formatted || 'No logs in that range.'}`);
   } catch (err) {
     console.error('Error in /logs:', err);
     await ctx.reply('❌ Failed to fetch logs.');
@@ -55,7 +91,7 @@ bot.command('logs', async (ctx) => {
 bot.command('start', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
 
-  const user = ctx.from;
+  const user = ctx.from!;
   const chat = ctx.chat;
 
   await greeting()(ctx);
@@ -64,8 +100,8 @@ bot.command('start', async (ctx) => {
   console.log(`Saved chat ID: ${chat.id} (${chat.type})`);
 
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
-    const name = user?.first_name || 'Unknown';
-    const username = user?.username ? `@${user.username}` : 'N/A';
+    const name = user.first_name || 'Unknown';
+    const username = user.username ? `@${user.username}` : 'N/A';
     await ctx.telegram.sendMessage(
       ADMIN_ID,
       `*New user started the bot!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
@@ -100,7 +136,8 @@ bot.on('text', async (ctx, next) => {
   if (!text) return;
 
   const keywords = ['mtg', 'notes', 'bio', 'neet', 'allen', 'question', 'physics'];
-  const isLikelyStudySearch = keywords.some(k => text.toLowerCase().includes(k)) || text.length > 3;
+  const isLikelyStudySearch =
+    keywords.some((k) => text.toLowerCase().includes(k)) || text.length > 3;
 
   if (isLikelyStudySearch) {
     await studySearch()(ctx);
@@ -113,7 +150,9 @@ bot.on('text', async (ctx, next) => {
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     if (member.username === ctx.botInfo.username) {
-      await ctx.reply('Thanks for adding me! Send any study-related keyword (like "mtg bio") to get materials.');
+      await ctx.reply(
+        'Thanks for adding me! Send any study-related keyword (like "mtg bio") to get materials.'
+      );
     }
   }
 });
@@ -123,22 +162,26 @@ bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   if (!chat?.id || !isPrivateChat(chat.type)) return;
 
-  const user = ctx.from;
+  const user = ctx.from!;
   const text = ctx.message?.text || '[non-text message]';
 
-  await appendRowToSheet('Logs', [
-    new Date().toISOString(),
-    user?.id || '',
-    user?.username || '',
-    text
-  ]);
+  try {
+    await appendRowToSheet('Logs', [
+      new Date().toISOString(),
+      user.id,
+      user.username || '',
+      text,
+    ]);
+  } catch (err) {
+    console.error('Error appending log:', err);
+  }
 
   const alreadyNotified = await saveToSheet(chat);
   console.log(`Saved chat ID: ${chat.id} (${chat.type})`);
 
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
-    const name = user?.first_name || 'Unknown';
-    const username = user?.username ? `@${user.username}` : 'N/A';
+    const name = user.first_name || 'Unknown';
+    const username = user.username ? `@${user.username}` : 'N/A';
     await ctx.telegram.sendMessage(
       ADMIN_ID,
       `*New user interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
@@ -159,6 +202,7 @@ bot.on('callback_query', async (ctx) => {
           inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
         },
       });
+      await ctx.answerCbQuery('Refreshed!');
     } catch (err) {
       console.error('Error refreshing users:', err);
       await ctx.answerCbQuery('Failed to refresh.');
@@ -173,6 +217,7 @@ export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
 };
 
+// Run locally in development
 if (ENVIRONMENT !== 'production') {
   development(bot);
 }
