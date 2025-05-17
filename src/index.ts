@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { saveToSheet } from './utils/saveToSheet';
+import { saveToSheet, appendRowToSheet } from './utils/saveToSheet';
 import { fetchChatIdsFromSheet } from './utils/chatStore';
 import { about } from './commands/about';
 import { greeting, checkMembership } from './text/greeting';
@@ -8,6 +8,7 @@ import { production, development } from './core';
 import { isPrivateChat } from './utils/groupSettings';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
+import { getLogsFromSheet } from './utils/logStore';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
@@ -18,7 +19,7 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Middleware to restrict private command usage
+// --- Middleware: Group membership restriction ---
 bot.use(async (ctx, next) => {
   if (ctx.chat && isPrivateChat(ctx.chat.type)) {
     const isAllowed = await checkMembership(ctx);
@@ -27,19 +28,30 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
-// --- Commands (Private Only) ---
+// --- /about command ---
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
   await about()(ctx);
 });
+
+// --- /logs command (admin only) ---
 bot.command('logs', async (ctx) => {
   if (ctx.from.id !== ADMIN_ID) return;
 
-  const logs = await getLogsFromSheetOrDB();
-  const latest = logs.slice(-10).map(row => `${row.username}: ${row.message}`).join('\n');
-  ctx.reply(`Latest Messages:\n\n${latest}`);
-}); 
+  try {
+    const logs = await getLogsFromSheet();
+    const latest = logs.slice(-10).reverse().map(
+      (log) => `• [${log.username || 'N/A'}]: ${log.message}`
+    ).join('\n');
 
+    await ctx.reply(`🗂 Latest Messages:\n\n${latest || 'No logs found.'}`);
+  } catch (err) {
+    console.error('Error in /logs:', err);
+    await ctx.reply('❌ Failed to fetch logs.');
+  }
+});
+
+// --- /start command ---
 bot.command('start', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
 
@@ -62,7 +74,7 @@ bot.command('start', async (ctx) => {
   }
 });
 
-// Admin: /users
+// --- /users command ---
 bot.command('users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
   try {
@@ -79,15 +91,14 @@ bot.command('users', async (ctx) => {
   }
 });
 
-// Admin: /broadcast
+// --- /broadcast command ---
 setupBroadcast(bot);
 
-// --- Study Search (Group + Private) ---
+// --- Study material search ---
 bot.on('text', async (ctx, next) => {
   const text = ctx.message?.text?.trim();
   if (!text) return;
 
-  // Simple trigger logic (e.g. message like "bio mtg" or "mtg notes")
   const keywords = ['mtg', 'notes', 'bio', 'neet', 'allen', 'question', 'physics'];
   const isLikelyStudySearch = keywords.some(k => text.toLowerCase().includes(k)) || text.length > 3;
 
@@ -98,7 +109,7 @@ bot.on('text', async (ctx, next) => {
   }
 });
 
-// --- New Group Member Welcome ---
+// --- Welcome new group members ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     if (member.username === ctx.botInfo.username) {
@@ -107,16 +118,25 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- Message Tracker (Private only) ---
+// --- Track all private messages (and log to sheet) ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   if (!chat?.id || !isPrivateChat(chat.type)) return;
+
+  const user = ctx.from;
+  const text = ctx.message?.text || '[non-text message]';
+
+  await appendRowToSheet('Logs', [
+    new Date().toISOString(),
+    user?.id || '',
+    user?.username || '',
+    text
+  ]);
 
   const alreadyNotified = await saveToSheet(chat);
   console.log(`Saved chat ID: ${chat.id} (${chat.type})`);
 
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
-    const user = ctx.from;
     const name = user?.first_name || 'Unknown';
     const username = user?.username ? `@${user.username}` : 'N/A';
     await ctx.telegram.sendMessage(
@@ -127,7 +147,7 @@ bot.on('message', async (ctx) => {
   }
 });
 
-// --- Callback: refresh users ---
+// --- Refresh user count ---
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
   if (data === 'refresh_users' && ctx.from?.id === ADMIN_ID) {
@@ -148,7 +168,7 @@ bot.on('callback_query', async (ctx) => {
   }
 });
 
-// --- Vercel Export ---
+// --- Export for Vercel ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
 };
