@@ -105,6 +105,25 @@ bot.on('text', async (ctx, next) => {
   }
 });
 
+bot.on('new_chat_members', async (ctx) => {
+  const groupName = ctx.chat?.title || 'this group';
+
+  for (const member of ctx.message.new_chat_members) {
+    // Skip if it's the bot itself (optional)
+    if (member.username === ctx.botInfo.username) {
+      await ctx.reply(
+        `Thanks for adding me! Mention me like @${BOT_USERNAME} with a study keyword (e.g. "mtg bio") to get materials.`
+      );
+      continue;
+    }
+
+    const name = member.first_name || 'there';
+    await ctx.reply(
+      `Hey there ${name}, and welcome to ${groupName}!\nYou can now ask for study material — just type for example:\n@${BOT_USERNAME} mtg Neet pyq book`
+    );
+  }
+});
+
 // --- New Group Member Welcome ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
