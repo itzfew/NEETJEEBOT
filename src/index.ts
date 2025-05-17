@@ -117,7 +117,7 @@ bot.on('new_chat_members', async (ctx) => {
       );
     } else {
       await ctx.reply(
-        `*Hi ${name}!* Welcome! \n\nType Type *@${BOT_USERNAME} mtg bio* to get study material.`,
+        `*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material.`,
         { parse_mode: 'Markdown' }
       );
     }
