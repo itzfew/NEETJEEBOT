@@ -32,6 +32,13 @@ bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
   await about()(ctx);
 });
+bot.command('logs', async (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) return;
+
+  const logs = await getLogsFromSheetOrDB();
+  const latest = logs.slice(-10).map(row => `${row.username}: ${row.message}`).join('\n');
+  ctx.reply(`Latest Messages:\n\n${latest}`);
+}); 
 
 bot.command('start', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
