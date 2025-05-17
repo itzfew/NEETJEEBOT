@@ -78,7 +78,7 @@ setupBroadcast(bot);
 
 // --- Study Search (Private + Mention in Groups Only) ---
 bot.on('text', async (ctx, next) => {
-  const text = ctx.message?.text?.trim();
+  let text = ctx.message?.text?.trim();
   if (!text) return;
 
   const chatType = ctx.chat?.type || '';
@@ -86,13 +86,19 @@ bot.on('text', async (ctx, next) => {
   const isPrivate = chatType === 'private';
 
   // In groups, only respond if the bot is mentioned
-  const mentioned = ctx.message.entities?.some(
+  const mentionedEntity = ctx.message.entities?.find(
     (entity) =>
       entity.type === 'mention' &&
       text.slice(entity.offset, entity.offset + entity.length).toLowerCase() === `@${BOT_USERNAME.toLowerCase()}`
   );
 
-  if (isPrivate || (isGroup && mentioned)) {
+  if (isPrivate || (isGroup && mentionedEntity)) {
+    // Remove mention from message text for clean search
+    if (mentionedEntity) {
+      text = text.replace(`@${BOT_USERNAME}`, '').trim();
+      ctx.message.text = text; // Update text for studySearch to use
+    }
+
     await studySearch()(ctx);
   } else {
     await next();
