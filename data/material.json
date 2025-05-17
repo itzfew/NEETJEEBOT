@@ -280,5 +280,17 @@
     { "label": "Gurukul Oswal Objective IIT JEE", "key": "gurukul-oswal-objective-iit-jee" },
     { "label": "Narayana JEE Advanced Test", "key": "narayana-jee-advanced-test" }
   ]
+},
+  {
+  "title": "Motion Study Material",
+  "items": [
+    { "label": "Maths Module", "key": "motion-classes-maths-module" },
+    { "label": "IIT Chemistry Module", "key": "motion-iit-chemistry-module" },
+    { "label": "Physics Module", "key": "motion-classes-physics-module" },
+    { "label": "Final Revision Module", "key": "motion-final-revision-module" },
+    { "label": "Revision Module Physics", "key": "motion-revision-module-physics" },
+    { "label": "Revision Module Chemistry", "key": "motion-revision-module-chemistry" },
+    { "label": "Revision Module Mathematics", "key": "motion-revision-module-mathematics" }
+  ]
 }
 ]
