@@ -2,18 +2,16 @@ export const saveToSheet = async (chat: {
   id: number;
   username?: string;
   first_name?: string;
-  message?: string; // Add message field
 }): Promise<boolean> => {
   const payload = {
     id: String(chat.id),
     username: chat.username || '',
     first_name: chat.first_name || '',
-    message: chat.message || '', // Include message
   };
 
   try {
     const response = await fetch(
-      'https://script.google.com/macros/s/AKfycbySdlu6je3PCA-RvNXlF09K4hVKUd4aVPcUbh1lFtVJO-WJHc07swr8qQP609CNigtK/exec',
+      'https://script.google.com/macros/s/AKfycbw0qDOyfTgmvuFYqF1apvXMn9Uv0HhG4IwBTmWTibAB--I8yrHgHHmPkAU5Hg3f9mOe/exec',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -26,9 +24,9 @@ export const saveToSheet = async (chat: {
 
     if (response.ok) {
       if (resultText.includes('Already Notified')) {
-        return true;
+        return true; // Already exists
       } else if (resultText.includes('Saved')) {
-        return false;
+        return false; // Newly added
       }
     } else {
       console.error(`Sheet API error: ${response.status} ${response.statusText}`);
@@ -37,5 +35,5 @@ export const saveToSheet = async (chat: {
     console.error('Error in saveToSheet:', error);
   }
 
-  return false;
+  return false; // fallback, treat as new
 };
