@@ -1,8 +1,8 @@
-// utils/logStore.ts
+// src/utils/logStore.ts
 import { google } from 'googleapis';
 
-const SHEET_ID = process.env.SHEET_ID!;
-const RANGE = 'Logs!A:D'; // Adjust as per your sheet structure
+const SHEET_ID = '1BB4PfC4rL9Py5D9zyj0N15EZ2TiYKfuozw44NHqdvsk'; // Hardcoded sheet ID
+const RANGE = 'Logs!A:D'; // Sheet name and range
 
 export const getLogsFromSheet = async () => {
   const auth = new google.auth.GoogleAuth({
@@ -17,10 +17,13 @@ export const getLogsFromSheet = async () => {
   });
 
   const rows = res.data.values || [];
-  return rows.map((row) => ({
-    timestamp: row[0],
-    userId: row[1],
-    username: row[2],
-    message: row[3],
-  }));
+
+  return rows
+    .filter(row => row.length >= 4)
+    .map((row) => ({
+      timestamp: row[0],
+      userId: row[1],
+      username: row[2],
+      message: row[3],
+    }));
 };
