@@ -12,6 +12,7 @@ import { studySearch } from './commands/study';
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
 const ADMIN_ID = 6930703214;
+const BOT_USERNAME = 'SearchNEETJEEBot'; // Replace with your actual bot username (without @)
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 console.log(`Running bot in ${ENVIRONMENT} mode`);
@@ -75,20 +76,23 @@ bot.command('users', async (ctx) => {
 // Admin: /broadcast
 setupBroadcast(bot);
 
-// --- Study Search (Group + Private) ---
+// --- Study Search (Private + Mention in Groups Only) ---
 bot.on('text', async (ctx, next) => {
   const text = ctx.message?.text?.trim();
   if (!text) return;
 
-  const isGroup = ['group', 'supergroup'].includes(ctx.chat?.type);
-  const mentionedBot = ctx.message.entities?.some(
-    (e) => e.type === 'mention' && text.slice(e.offset, e.offset + e.length) === `@${ctx.botInfo.username}`
+  const chatType = ctx.chat?.type || '';
+  const isGroup = chatType === 'group' || chatType === 'supergroup';
+  const isPrivate = chatType === 'private';
+
+  // In groups, only respond if the bot is mentioned
+  const mentioned = ctx.message.entities?.some(
+    (entity) =>
+      entity.type === 'mention' &&
+      text.slice(entity.offset, entity.offset + entity.length).toLowerCase() === `@${BOT_USERNAME.toLowerCase()}`
   );
 
-  const keywords = ['mtg', 'notes', 'bio', 'neet', 'allen', 'question','jee', 'physics'];
-  const isLikelyStudySearch = keywords.some(k => text.toLowerCase().includes(k)) || text.length > 3;
-
-  if ((isGroup && mentionedBot && isLikelyStudySearch) || (!isGroup && isLikelyStudySearch)) {
+  if (isPrivate || (isGroup && mentioned)) {
     await studySearch()(ctx);
   } else {
     await next();
@@ -99,12 +103,12 @@ bot.on('text', async (ctx, next) => {
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     if (member.username === ctx.botInfo.username) {
-      await ctx.reply('Thanks for adding me! Send any study-related keyword (like "mtg bio") to get materials.');
+      await ctx.reply('Thanks for adding me! Mention me like @SearchNEETJEEBot with a study keyword (e.g. "mtg bio") to get materials.');
     }
   }
 });
 
-// --- Message Tracker (Private only) ---
+// --- Message Tracker (Private Only) ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   if (!chat?.id || !isPrivateChat(chat.type)) return;
