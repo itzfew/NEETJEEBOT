@@ -109,27 +109,21 @@ bot.on('new_chat_members', async (ctx) => {
   const groupName = ctx.chat?.title || 'this group';
 
   for (const member of ctx.message.new_chat_members) {
-    // Skip if it's the bot itself (optional)
-    if (member.username === ctx.botInfo.username) {
+    const isBot = member.username === ctx.botInfo.username;
+
+    if (isBot) {
       await ctx.reply(
-        `Thanks for adding me! Mention me like @${BOT_USERNAME} with a study keyword (e.g. "mtg bio") to get materials.`
+        `*Thanks for adding me!*\n\n_Mention me like_ *@${BOT_USERNAME}* _with a study keyword (e.g.,_ \`mtg bio\` _) to get materials._`,
+        { parse_mode: 'Markdown' }
       );
       continue;
     }
 
     const name = member.first_name || 'there';
     await ctx.reply(
-      `Hey there ${name}, and welcome to ${groupName}!\nYou can now ask for study material — just type for example:\n@${BOT_USERNAME} mtg Neet pyq book`
+      `*Hey there ${name}, welcome to* _${groupName}_!\n\nYou can now *ask for study material* — just type for example:\n\n*@${BOT_USERNAME} mtg Neet pyq book*`,
+      { parse_mode: 'Markdown' }
     );
-  }
-});
-
-// --- New Group Member Welcome ---
-bot.on('new_chat_members', async (ctx) => {
-  for (const member of ctx.message.new_chat_members) {
-    if (member.username === ctx.botInfo.username) {
-      await ctx.reply('Thanks for adding me! Mention me like @SearchNEETJEEBot with a study keyword (e.g. "mtg bio") to get materials.');
-    }
   }
 });
 
