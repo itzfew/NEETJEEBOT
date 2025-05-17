@@ -202,5 +202,83 @@
     { "label": "Allen Biology Handbook", "key": "allen-biology-handbook" },
     { "label": "Allen Maths Handbook", "key": "allen-maths-handbook" }
   ]
+},
+  {
+  "title": "Bansal Classes Material",
+  "items": [
+    { "label": "Chemistry Theory", "key": "bansal-classes-chemistry-theory" },
+    { "label": "Math Questions", "key": "bansal-classes-math-questions" },
+    { "label": "Physics Booklet", "key": "bansal-classes-physics-booklet" },
+    { "label": "Physics Material", "key": "bansal-classes-physics-material" },
+    { "label": "Math Theory", "key": "bansal-classes-math-theory" },
+    { "label": "Chemistry Booklet - 1", "key": "bansal-classes-chemistry-booklet-1" },
+    { "label": "Organic Chemistry - 1", "key": "bansal-classes-organic-chemistry-1" },
+    { "label": "Chemistry Booklet - 2", "key": "bansal-classes-chemistry-booklet-2" },
+    { "label": "Organic Chemistry - 2", "key": "bansal-classes-organic-chemistry-2" },
+    { "label": "Physics Theory", "key": "bansal-classes-physics-theory" }
+  ]
+},
+{
+  "title": "Oswaal Books",
+  "items": [
+    { "label": "Oswaal Math", "key": "oswaal-math" },
+    { "label": "Oswaal Physics", "key": "oswaal-physics" },
+    { "label": "Oswaal Chemistry", "key": "oswaal-chemistry" }
+  ]
+},
+{
+  "title": "Mohit Bhargava Physics",
+  "items": [
+    { "label": "Physics 12th - 1", "key": "mohit-bhargava-physics-12th-1" },
+    { "label": "Physics 12th - 2", "key": "mohit-bhargava-physics-12th-2" }
+  ]
+},
+{
+  "title": "NEET Crash Course - PW (45 Days)",
+  "items": [
+    { "label": "Physics", "key": "neet-crash-pw-45-days-physics" },
+    { "label": "Biology", "key": "neet-crash-pw-45-days-biology" },
+    { "label": "Chemistry", "key": "neet-crash-pw-45-days-chemistry" }
+  ]
+},
+{
+  "title": "IIT Kalrashukla JEE Advanced Problems",
+  "items": [
+    { "label": "Chapters 1-6", "key": "iit-kalrashukla-jee-advanced-problems-1-6" },
+    { "label": "Chapters 7-12", "key": "iit-kalrashukla-jee-advanced-problems-7-12" },
+    { "label": "Chapters 13-19", "key": "iit-kalrashukla-jee-advanced-problems-13-19" }
+  ]
+},
+{
+  "title": "Aakash NCERT Maps",
+  "items": [
+    { "label": "Zoology", "key": "aakash-zoology-ncert-map" },
+    { "label": "Botany", "key": "aakash-botany-ncert-map" },
+    { "label": "Physics", "key": "aakash-physics-ncert-map" },
+    { "label": "Chemistry", "key": "aakash-chemistry-ncert-map" }
+  ]
+},
+{
+  "title": "RD Sharma",
+  "items": [
+    { "label": "Class 11", "key": "rd-sharma-11th" },
+    { "label": "Class 12 - Vol 2", "key": "rd-sharma-12th-2" },
+    { "label": "Class 12 - Vol 1", "key": "rd-sharma-12th-1" }
+  ]
+},
+{
+  "title": "Arihant Crash Course Series - JEE Mains",
+  "items": [
+    { "label": "Physics", "key": "arihant-40-days-crash-jee-mains-physics" },
+    { "label": "Chemistry", "key": "arihant-40-days-crash-jee-mains-chemistry" },
+    { "label": "Mathematics", "key": "arihant-40-days-crash-jee-mains-mathematics" }
+  ]
+},
+{
+  "title": "Gurukul & Narayana",
+  "items": [
+    { "label": "Gurukul Oswal Objective IIT JEE", "key": "gurukul-oswal-objective-iit-jee" },
+    { "label": "Narayana JEE Advanced Test", "key": "narayana-jee-advanced-test" }
+  ]
 }
 ]
