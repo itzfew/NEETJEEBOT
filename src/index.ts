@@ -80,11 +80,15 @@ bot.on('text', async (ctx, next) => {
   const text = ctx.message?.text?.trim();
   if (!text) return;
 
-  // Simple trigger logic (e.g. message like "bio mtg" or "mtg notes")
-  const keywords = ['mtg', 'notes', 'bio', 'neet', 'allen', 'question', 'physics'];
+  const isGroup = ['group', 'supergroup'].includes(ctx.chat?.type);
+  const mentionedBot = ctx.message.entities?.some(
+    (e) => e.type === 'mention' && text.slice(e.offset, e.offset + e.length) === `@${ctx.botInfo.username}`
+  );
+
+  const keywords = ['mtg', 'notes', 'bio', 'neet', 'allen', 'question','jee', 'physics'];
   const isLikelyStudySearch = keywords.some(k => text.toLowerCase().includes(k)) || text.length > 3;
 
-  if (isLikelyStudySearch) {
+  if ((isGroup && mentionedBot && isLikelyStudySearch) || (!isGroup && isLikelyStudySearch)) {
     await studySearch()(ctx);
   } else {
     await next();
