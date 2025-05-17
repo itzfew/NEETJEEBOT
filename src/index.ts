@@ -106,27 +106,21 @@ bot.on('text', async (ctx, next) => {
 });
 
 bot.on('new_chat_members', async (ctx) => {
-  // Delete Telegram's default join message
-  try {
-    await ctx.deleteMessage();
-  } catch (err) {
-    console.warn('Join message not deleted:', err);
-  }
-
   for (const member of ctx.message.new_chat_members) {
+    const name = member.first_name || 'there';
+
+    // Welcome only users (skip bot itself)
     if (member.username === ctx.botInfo.username) {
       await ctx.reply(
-        `*Thanks for adding me!*\n\n_Type *@${BOT_USERNAME} mtg bio* to get study materials._`,
+        `*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`,
         { parse_mode: 'Markdown' }
       );
-      continue;
+    } else {
+      await ctx.reply(
+        `*Hi ${name}!* Type *@${BOT_USERNAME} mtg bio* to get study material.`,
+        { parse_mode: 'Markdown' }
+      );
     }
-
-    const name = member.first_name || 'there';
-    await ctx.reply(
-      `*Hi ${name}!* Ask for study material by typing:\n*@${BOT_USERNAME} mtg bio*`,
-      { parse_mode: 'Markdown' }
-    );
   }
 });
 
