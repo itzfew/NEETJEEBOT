@@ -108,6 +108,13 @@ bot.on('text', async (ctx, next) => {
 bot.on('new_chat_members', async (ctx) => {
   const groupName = ctx.chat?.title || 'this group';
 
+  // Try deleting the system-generated "user joined" message
+  try {
+    await ctx.deleteMessage();
+  } catch (err) {
+    console.warn('Could not delete system join message:', err);
+  }
+
   for (const member of ctx.message.new_chat_members) {
     const isBot = member.username === ctx.botInfo.username;
 
