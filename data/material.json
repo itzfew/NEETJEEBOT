@@ -292,5 +292,61 @@
     { "label": "Revision Module Chemistry", "key": "motion-revision-module-chemistry" },
     { "label": "Revision Module Mathematics", "key": "motion-revision-module-mathematics" }
   ]
+},
+  {
+  "title": "Disha Publications",
+  "items": [
+    { "label": "360 Biology - Seep Pahuja", "key": "disha-360-biology-seep-pahuja" },
+    { "label": "NCERT Xtract Chemistry", "key": "disha-ncert-xtract-chemistry" },
+    { "label": "NCERT Xtract Biology", "key": "disha-ncert-xtract-biology" },
+    { "label": "NCERT Xtract Physics", "key": "disha-ncert-xtract-physics" },
+    { "label": "36 Years PYQ Biology 11th", "key": "disha-36-years-pyq-biology-11" },
+    { "label": "36 Years PYQ Biology 12th", "key": "disha-36-years-pyq-biology-12" },
+    { "label": "36 Years PYQ Chemistry 11th", "key": "disha-36-years-pyq-chemistry-11" },
+    { "label": "36 Years PYQ Chemistry 12th", "key": "disha-36-years-pyq-chemistry-12" },
+    { "label": "36 Years PYQ Physics 11th", "key": "disha-36-years-pyq-physics-11" },
+    { "label": "36 Years PYQ Physics 12th", "key": "disha-36-years-pyq-physics-12" }
+  ]
+},
+{
+  "title": "MTG PYQ Series",
+  "items": [
+    { "label": "19 Years JEE Mains Mathematics", "key": "mtg-19-years-jee-mains-mathematics" },
+    { "label": "36 Years PYQ Biology 11th", "key": "mtg-36-years-pyq-biology-11" },
+    { "label": "36 Years PYQ Biology 12th", "key": "mtg-36-years-pyq-biology-12" },
+    { "label": "36 Years PYQ Chemistry 11th", "key": "mtg-36-years-pyq-chemistry-11" },
+    { "label": "36 Years PYQ Chemistry 12th", "key": "mtg-36-years-pyq-chemistry-12" },
+    { "label": "36 Years PYQ Physics 11th", "key": "mtg-36-years-pyq-physics-11" }
+  ]
+},
+{
+  "title": "Vedantu Tatva Modules",
+  "items": [
+    { "label": "Tatva Math Vol 1", "key": "vedantu-tatva-math-vol-1" },
+    { "label": "Tatva Math Vol 2", "key": "vedantu-tatva-math-vol-2" },
+    { "label": "Tatva Math Vol 3", "key": "vedantu-tatva-math-vol-3" },
+    { "label": "Tatva Physics Vol 1", "key": "vedantu-tatva-physics-vol-1" },
+    { "label": "Tatva Physics Vol 2", "key": "vedantu-tatva-physics-vol-2" },
+    { "label": "Tatva Physics Vol 3", "key": "vedantu-tatva-physics-vol-3" },
+    { "label": "Tatva Physics Vol 4", "key": "vedantu-tatva-physics-vol-4" },
+    { "label": "Tatva Chemistry Vol 1", "key": "vedantu-tatva-chemistry-vol-1" },
+    { "label": "Tatva Chemistry Vol 2", "key": "vedantu-tatva-chemistry-vol-2" },
+    { "label": "Tatva Chemistry Vol 3", "key": "vedantu-tatva-chemistry-vol-3" },
+    { "label": "Tatva Chemistry Vol 4", "key": "vedantu-tatva-chemistry-vol-4" },
+    { "label": "Tatva Biology Vol 1", "key": "vedantu-tatva-biology-vol-1" },
+    { "label": "Tatva Biology Vol 2", "key": "vedantu-tatva-biology-vol-2" },
+    { "label": "Tatva Biology Vol 3", "key": "vedantu-tatva-biology-vol-3" },
+    { "label": "Tatva Biology Vol 4", "key": "vedantu-tatva-biology-vol-4" },
+    { "label": "Tatva Biology Vol 5", "key": "vedantu-tatva-biology-vol-5" },
+    { "label": "Tatva Biology Vol 6", "key": "vedantu-tatva-biology-vol-6" }
+  ]
+},
+{
+  "title": "Standard Authors",
+  "items": [
+    { "label": "RS Aggarwal Mathematics", "key": "rs-aggarwal-mathematics" },
+    { "label": "SL Arora Physics Vol 1", "key": "sl-arora-physics-vol-1" },
+    { "label": "SL Arora Physics Vol 2", "key": "sl-arora-physics-vol-2" }
+  ]
 }
 ]
