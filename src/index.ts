@@ -27,6 +27,20 @@ bot.use(async (ctx, next) => {
   }
   await next();
 });
+// Private Only: /add command with "Open Bot" button
+bot.command('add', async (ctx) => {
+  if (!isPrivateChat(ctx.chat.type)) return;
+
+  await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: 'Open Bot', url: 'https://t.me/NeetAspirantsBot' }
+        ]
+      ]
+    }
+  });
+});
 
 // --- Commands (Private Only) ---
 bot.command('about', async (ctx) => {
