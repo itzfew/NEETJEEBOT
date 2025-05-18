@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { saveToSheet } from './utils/saveToSheet';
-import { fetchChatIdsFromSheet } from './utils/chatStore';
+import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { about } from './commands/about';
 import { greeting, checkMembership } from './text/greeting';
 import { production, development } from './core';
@@ -12,7 +12,7 @@ import { studySearch } from './commands/study';
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
 const ADMIN_ID = 6930703214;
-const BOT_USERNAME = 'SearchNEETJEEBot'; // Replace with your actual bot username (without @)
+const BOT_USERNAME = 'SearchNEETJEEBot';
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 console.log(`Running bot in ${ENVIRONMENT} mode`);
@@ -27,22 +27,17 @@ bot.use(async (ctx, next) => {
   }
   await next();
 });
-// Private Only: /add command with "Open Bot" button
+
+// --- Commands ---
 bot.command('add', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
-
   await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
     reply_markup: {
-      inline_keyboard: [
-        [
-          { text: 'Open Bot', url: 'https://t.me/NeetAspirantsBot' }
-        ]
-      ]
-    }
+      inline_keyboard: [[{ text: 'Open Bot', url: 'https://t.me/NeetAspirantsBot' }]],
+    },
   });
 });
 
-// --- Commands (Private Only) ---
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
   await about()(ctx);
@@ -55,9 +50,7 @@ bot.command('start', async (ctx) => {
   const chat = ctx.chat;
 
   await greeting()(ctx);
-
   const alreadyNotified = await saveToSheet(chat);
-  console.log(`Saved chat ID: ${chat.id} (${chat.type})`);
 
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
     const name = user?.first_name || 'Unknown';
@@ -70,11 +63,10 @@ bot.command('start', async (ctx) => {
   }
 });
 
-// Admin: /users
 bot.command('users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
   try {
-    const chatIds = await fetchChatIdsFromSheet();
+    const chatIds = await fetchChatIdsFromFirebase();
     await ctx.reply(`📊 Total users: ${chatIds.length}`, {
       parse_mode: 'Markdown',
       reply_markup: {
@@ -87,10 +79,32 @@ bot.command('users', async (ctx) => {
   }
 });
 
-// Admin: /broadcast
+bot.command('logs', async (ctx) => {
+  if (ctx.from?.id !== ADMIN_ID) return;
+  const parts = ctx.message?.text?.split(' ') || [];
+  if (parts.length < 2) return ctx.reply('Usage: /logs YYYY-MM-DD');
+
+  const date = parts[1];
+  try {
+    const logs = await getLogsByDate(date);
+    if (logs === 'No logs found for this date.') {
+      await ctx.reply(logs);
+    } else {
+      await ctx.replyWithDocument({
+        source: Buffer.from(logs, 'utf-8'),
+        filename: `logs-${date}.txt`,
+      });
+    }
+  } catch (err) {
+    console.error('Error fetching logs:', err);
+    await ctx.reply('❌ Error fetching logs.');
+  }
+});
+
+// Broadcast
 setupBroadcast(bot);
 
-// --- Study Search (Private + Mention in Groups Only) ---
+// Study Search
 bot.on('text', async (ctx, next) => {
   let text = ctx.message?.text?.trim();
   if (!text) return;
@@ -99,7 +113,6 @@ bot.on('text', async (ctx, next) => {
   const isGroup = chatType === 'group' || chatType === 'supergroup';
   const isPrivate = chatType === 'private';
 
-  // In groups, only respond if the bot is mentioned
   const mentionedEntity = ctx.message.entities?.find(
     (entity) =>
       entity.type === 'mention' &&
@@ -107,23 +120,20 @@ bot.on('text', async (ctx, next) => {
   );
 
   if (isPrivate || (isGroup && mentionedEntity)) {
-    // Remove mention from message text for clean search
     if (mentionedEntity) {
       text = text.replace(`@${BOT_USERNAME}`, '').trim();
-      ctx.message.text = text; // Update text for studySearch to use
+      ctx.message.text = text;
     }
-
     await studySearch()(ctx);
   } else {
     await next();
   }
 });
 
+// New chat members
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
-
-    // Welcome only users (skip bot itself)
     if (member.username === ctx.botInfo.username) {
       await ctx.reply(
         `*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`,
@@ -138,14 +148,12 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- Message Tracker (Private Only) ---
+// Track all private messages (log)
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   if (!chat?.id || !isPrivateChat(chat.type)) return;
 
   const alreadyNotified = await saveToSheet(chat);
-  console.log(`Saved chat ID: ${chat.id} (${chat.type})`);
-
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
     const user = ctx.from;
     const name = user?.first_name || 'Unknown';
@@ -158,24 +166,17 @@ bot.on('message', async (ctx) => {
   }
 });
 
-// Handle refresh button for user count
+// Refresh users button
 bot.action('refresh_users', async (ctx) => {
-  if (ctx.from?.id !== ADMIN_ID) {
-    await ctx.answerCbQuery('Unauthorized');
-    return;
-  }
+  if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
 
   try {
-    const chatIds = await fetchChatIdsFromSheet();
-    const totalUsers = chatIds.length;
-    
-    await ctx.editMessageText(`📊 Total users: ${totalUsers} (refreshed)`, {
+    const chatIds = await fetchChatIdsFromFirebase();
+    await ctx.editMessageText(`📊 Total users: ${chatIds.length} (refreshed)`, {
       parse_mode: 'Markdown',
       reply_markup: {
-        inline_keyboard: [
-          [{ text: 'Refresh', callback_data: 'refresh_users' }]
-        ]
-      }
+        inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
+      },
     });
     await ctx.answerCbQuery('Refreshed!');
   } catch (err) {
@@ -183,6 +184,7 @@ bot.action('refresh_users', async (ctx) => {
     await ctx.answerCbQuery('Refresh failed');
   }
 });
+
 // --- Vercel Export ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
