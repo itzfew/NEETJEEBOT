@@ -1,3 +1,4 @@
+// Full index.ts with group/channel user save, private logs, and media forwarding
 import { Telegraf } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
@@ -6,7 +7,6 @@ import { logMessage } from './utils/logMessage';
 import { about } from './commands/about';
 import { greeting, checkMembership } from './text/greeting';
 import { production, development } from './core';
-import { isPrivateChat } from './utils/groupSettings';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
 
@@ -20,19 +20,10 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Restrict command usage for private chats only
-bot.use(async (ctx, next) => {
-  if (ctx.chat && isPrivateChat(ctx.chat.type)) {
-    const isAllowed = await checkMembership(ctx);
-    if (!isAllowed) return;
-  }
-  await next();
-});
-
 // --- Commands ---
 
 bot.command('add', async (ctx) => {
-  if (!isPrivateChat(ctx.chat.type)) return;
+  if (ctx.chat?.type !== 'private') return;
   await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
     reply_markup: {
       inline_keyboard: [[{ text: 'Open Bot', url: 'https://t.me/NeetAspirantsBot' }]],
@@ -41,26 +32,29 @@ bot.command('add', async (ctx) => {
 });
 
 bot.command('about', async (ctx) => {
-  if (!isPrivateChat(ctx.chat.type)) return;
+  if (ctx.chat?.type !== 'private') return;
   await about()(ctx);
 });
 
 bot.command('start', async (ctx) => {
-  if (!isPrivateChat(ctx.chat.type)) return;
-
-  const user = ctx.from;
   const chat = ctx.chat;
+  const user = ctx.from;
 
-  await greeting()(ctx);
   const alreadyNotified = await saveToFirebase(chat);
-  await logMessage(chat.id, '/start', user);
 
-  if (chat.id !== ADMIN_ID && !alreadyNotified) {
-    const name = user?.first_name || 'Unknown';
-    const username = user?.username ? `@${user.username}` : 'N/A';
+  if (chat.type === 'private') {
+    await greeting()(ctx);
+    await logMessage(chat.id, '/start', user);
+  }
+
+  if (!alreadyNotified && chat.id !== ADMIN_ID) {
+    const name = user?.first_name || chat.title || 'Unknown';
+    const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
+    const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
+
     await ctx.telegram.sendMessage(
       ADMIN_ID,
-      `*New user started the bot!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
+      `*New ${chatTypeLabel} started the bot!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
       { parse_mode: 'Markdown' }
     );
   }
@@ -70,7 +64,7 @@ bot.command('users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
   try {
     const chatIds = await fetchChatIdsFromFirebase();
-    await ctx.reply(`📊 Total users: ${chatIds.length}`, {
+    await ctx.reply(`📊 Total interacting entities: ${chatIds.length}`, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
@@ -104,7 +98,7 @@ bot.command('logs', async (ctx) => {
   }
 });
 
-// --- Inline Queries and Text Command ---
+// --- Inline text search ---
 setupBroadcast(bot);
 
 bot.on('text', async (ctx, next) => {
@@ -132,7 +126,7 @@ bot.on('text', async (ctx, next) => {
   }
 });
 
-// --- New Chat Members ---
+// --- New group members welcome ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
@@ -150,54 +144,58 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- Private Message Logger ---
+// --- Private-only logs + forward non-text ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
   const message = ctx.message;
 
-  if (!chat?.id || !isPrivateChat(chat.type)) return;
+  if (!chat?.id) return;
 
   const alreadyNotified = await saveToFirebase(chat);
 
-  const logText = message.text || `[${message?.media_group_id ? 'Media Group' : message?.photo ? 'Photo' : message?.document ? 'Document' : message?.video ? 'Video' : 'Non-text'} message]`;
-  await logMessage(chat.id, logText, user);
+  if (chat.type === 'private') {
+    const logText =
+      message.text || `[${message?.media_group_id ? 'Media Group' : message?.photo ? 'Photo' : message?.document ? 'Document' : message?.video ? 'Video' : 'Non-text'} message]`;
+    await logMessage(chat.id, logText, user);
 
-  // Forward non-text messages
-  if (!message.text) {
-    const name = user?.first_name || 'Unknown';
-    const username = user?.username ? `@${user.username}` : 'N/A';
-    const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    if (!message.text) {
+      const name = user?.first_name || 'Unknown';
+      const username = user?.username ? `@${user.username}` : 'N/A';
+      const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-    const header = `*Non-text message received!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n`;
+      const header = `*Non-text message received!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n`;
 
-    try {
-      await ctx.telegram.sendMessage(ADMIN_ID, header, { parse_mode: 'Markdown' });
-      await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
-    } catch (err) {
-      console.error('Failed to forward non-text message:', err);
+      try {
+        await ctx.telegram.sendMessage(ADMIN_ID, header, { parse_mode: 'Markdown' });
+        await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
+      } catch (err) {
+        console.error('Failed to forward non-text message:', err);
+      }
     }
   }
 
-  // Notify admin if new user
-  if (chat.id !== ADMIN_ID && !alreadyNotified) {
-    const name = user?.first_name || 'Unknown';
-    const username = user?.username ? `@${user.username}` : 'N/A';
+  // Admin notify on first message (any chat type)
+  if (!alreadyNotified && chat.id !== ADMIN_ID) {
+    const name = user?.first_name || chat.title || 'Unknown';
+    const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
+    const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
+
     await ctx.telegram.sendMessage(
       ADMIN_ID,
-      `*New user interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
+      `*New ${chatTypeLabel} interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
       { parse_mode: 'Markdown' }
     );
   }
 });
 
-// --- Refresh Button ---
+// --- Refresh inline ---
 bot.action('refresh_users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
 
   try {
     const chatIds = await fetchChatIdsFromFirebase();
-    await ctx.editMessageText(`📊 Total users: ${chatIds.length} (refreshed)`, {
+    await ctx.editMessageText(`📊 Total interacting entities: ${chatIds.length} (refreshed)`, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
