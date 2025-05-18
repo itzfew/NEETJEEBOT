@@ -10,6 +10,6 @@ export const logMessage = async (chatId: number, message: string, from: any) => 
     message,
     username: from?.username || '',
     first_name: from?.first_name || '',
-    timestamp: Date.now(),
+    timestamp: new Date().toISOString()
   });
 };
