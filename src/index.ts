@@ -20,7 +20,25 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Middleware to restrict private command usage
+// --- Global Middleware: Save chat and log every message ---
+bot.on('message', async (ctx, next) => {
+  const chat = ctx.chat;
+  const user = ctx.from;
+  const message = ctx.message;
+
+  // Save user/chat to Firebase if not already saved
+  if (chat) await saveToFirebase(chat);
+
+  // Log message (text or fallback)
+  const text = 'text' in message ? message.text : '[non-text message]';
+  if (chat && user) {
+    await logMessage(chat.id, text, user);
+  }
+
+  return next();
+});
+
+// --- Restrict private command usage ---
 bot.use(async (ctx, next) => {
   if (ctx.chat && isPrivateChat(ctx.chat.type)) {
     const isAllowed = await checkMembership(ctx);
@@ -52,7 +70,6 @@ bot.command('start', async (ctx) => {
 
   await greeting()(ctx);
   const alreadyNotified = await saveToFirebase(chat);
-  await logMessage(chat.id, '/start', user);
 
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
     const name = user?.first_name || 'Unknown';
@@ -106,7 +123,7 @@ bot.command('logs', async (ctx) => {
 // Broadcast
 setupBroadcast(bot);
 
-// Study Search
+// Study Search (Private or group with mention)
 bot.on('text', async (ctx, next) => {
   let text = ctx.message?.text?.trim();
   if (!text) return;
@@ -147,26 +164,6 @@ bot.on('new_chat_members', async (ctx) => {
         { parse_mode: 'Markdown' }
       );
     }
-  }
-});
-
-// Track all private messages (log)
-bot.on('message', async (ctx) => {
-  const chat = ctx.chat;
-  const user = ctx.from;
-  if (!chat?.id || !isPrivateChat(chat.type)) return;
-
-  const alreadyNotified = await saveToFirebase(chat);
-  await logMessage(chat.id, ctx.message?.text || '[non-text message]', user);
-
-  if (chat.id !== ADMIN_ID && !alreadyNotified) {
-    const name = user?.first_name || 'Unknown';
-    const username = user?.username ? `@${user.username}` : 'N/A';
-    await ctx.telegram.sendMessage(
-      ADMIN_ID,
-      `*New user interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
-      { parse_mode: 'Markdown' }
-    );
   }
 });
 
