@@ -158,27 +158,31 @@ bot.on('message', async (ctx) => {
   }
 });
 
-// --- Callback: refresh users ---
-bot.on('callback_query', async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  if (data === 'refresh_users' && ctx.from?.id === ADMIN_ID) {
-    try {
-      const chatIds = await fetchChatIdsFromSheet();
-      await ctx.editMessageText(`📊 Total users: ${chatIds.length}`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
-        },
-      });
-    } catch (err) {
-      console.error('Error refreshing users:', err);
-      await ctx.answerCbQuery('Failed to refresh.');
-    }
-  } else {
-    await ctx.answerCbQuery('Unknown action');
+// Handle refresh button for user count
+bot.action('refresh_users', async (ctx) => {
+  if (ctx.from?.id !== ADMIN_ID) {
+    await ctx.answerCbQuery('Unauthorized');
+    return;
+  }
+
+  try {
+    const chatIds = await fetchChatIdsFromSheet();
+    const totalUsers = chatIds.length;
+    
+    await ctx.editMessageText(`📊 Total users: ${totalUsers} (refreshed)`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'Refresh', callback_data: 'refresh_users' }]
+        ]
+      }
+    });
+    await ctx.answerCbQuery('Refreshed!');
+  } catch (err) {
+    console.error('Failed to refresh user count:', err);
+    await ctx.answerCbQuery('Refresh failed');
   }
 });
-
 // --- Vercel Export ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
