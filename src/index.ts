@@ -1,7 +1,8 @@
 import { Telegraf } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { saveToSheet } from './utils/saveToSheet';
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
+import { saveToFirebase } from './utils/saveToFirebase';
+import { logMessage } from './utils/logMessage';
 import { about } from './commands/about';
 import { greeting, checkMembership } from './text/greeting';
 import { production, development } from './core';
@@ -50,7 +51,8 @@ bot.command('start', async (ctx) => {
   const chat = ctx.chat;
 
   await greeting()(ctx);
-  const alreadyNotified = await saveToSheet(chat);
+  const alreadyNotified = await saveToFirebase(chat);
+  await logMessage(chat.id, '/start', user);
 
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
     const name = user?.first_name || 'Unknown';
@@ -151,11 +153,13 @@ bot.on('new_chat_members', async (ctx) => {
 // Track all private messages (log)
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
+  const user = ctx.from;
   if (!chat?.id || !isPrivateChat(chat.type)) return;
 
-  const alreadyNotified = await saveToSheet(chat);
+  const alreadyNotified = await saveToFirebase(chat);
+  await logMessage(chat.id, ctx.message?.text || '[non-text message]', user);
+
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
-    const user = ctx.from;
     const name = user?.first_name || 'Unknown';
     const username = user?.username ? `@${user.username}` : 'N/A';
     await ctx.telegram.sendMessage(
