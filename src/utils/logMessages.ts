@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAxRvC5DncdYzmpAsn7rlLB-9jqNYyEroBPaOMwF-Nq2h05QNfSlMLdeHSfK26OhGr/exec'; // replace with your actual URL
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQLYXELr3LqUOcAlmiNK_cZDxzw7jWvpAO8JxeOWRN_dwLHxG2Gju2hDLeKOn3bTgW/exec'; // replace with your actual URL
 
 export async function logMessage({
   id,
