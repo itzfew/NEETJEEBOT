@@ -1,23 +1,32 @@
-import fs from 'fs';
-import path from 'path';
+import axios from 'axios';
 
-const LOGS_DIR = path.resolve(__dirname, '../../logs');
-if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAxRvC5DncdYzmpAsn7rlLB-9jqNYyEroBPaOMwF-Nq2h05QNfSlMLdeHSfK26OhGr/exec'; // replace with your actual URL
 
-export const logMessage = (data: {
-  chatId: number;
-  username?: string;
-  firstName?: string;
+export async function logMessage({
+  id,
+  username,
+  first_name,
+  text,
+  type,
+  timestamp
+}: {
+  id: string;
+  username: string;
+  first_name: string;
   text: string;
+  type: string;
   timestamp: string;
-}) => {
-  const date = data.timestamp.split('T')[0]; // YYYY-MM-DD
-  const logPath = path.join(LOGS_DIR, `${date}.txt`);
-  const logLine = `[${data.timestamp}] ${data.firstName} (${data.username || 'N/A'}) [${data.chatId}]: ${data.text}\n`;
-  fs.appendFileSync(logPath, logLine);
-};
-
-export const getLogFilePath = (date: string): string | null => {
-  const filePath = path.join(LOGS_DIR, `${date}.txt`);
-  return fs.existsSync(filePath) ? filePath : null;
-};
+}) {
+  try {
+    await axios.post(GOOGLE_SCRIPT_URL, {
+      id,
+      username,
+      first_name,
+      text,
+      type,
+      timestamp
+    });
+  } catch (err) {
+    console.error('Logging error:', err.message);
+  }
+}
