@@ -1,5 +1,5 @@
 import { Context } from 'telegraf';
-import { fetchChatIdsFromSheet } from '../utils/chatStore';
+import { fetchChatIdsFromFirebase } from '../utils/chatStore';
 
 const ADMIN_ID = 6930703214;
 
@@ -9,7 +9,7 @@ export const setupBroadcast = (bot: any) => {
       return ctx.reply('❌ You are not authorized to use this command.');
     }
 
-    const message = ctx.message as any; // Add this line to bypass the type check
+    const message = ctx.message as any;
     const reply = message?.reply_to_message;
 
     if (!reply) {
@@ -17,7 +17,7 @@ export const setupBroadcast = (bot: any) => {
     }
 
     try {
-      const chatIds = await fetchChatIdsFromSheet();
+      const chatIds = await fetchChatIdsFromFirebase();
       let sent = 0;
 
       for (const chatId of chatIds) {
