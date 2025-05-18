@@ -1,23 +1,27 @@
-let chatIds: number[] = [];
+// utils/chatStore.ts
+import { db } from './firebase';
+import { get, ref } from 'firebase/database';
 
-export const saveChatId = (id: number) => {
-  if (!chatIds.includes(id)) {
-    chatIds.push(id);
-  }
+export const fetchChatIdsFromFirebase = async (): Promise<string[]> => {
+  const snapshot = await get(ref(db, 'users'));
+  const data = snapshot.val();
+  return data ? Object.keys(data) : [];
 };
 
-export const getAllChatIds = (): number[] => {
-  return chatIds;
-};
-export const fetchChatIdsFromSheet = async (): Promise<number[]> => {
-  try {
-    const response = await fetch('https://script.google.com/macros/s/AKfycbyQLYXELr3LqUOcAlmiNK_cZDxzw7jWvpAO8JxeOWRN_dwLHxG2Gju2hDLeKOn3bTgW/exec');
-    const data = await response.json();
+export const getLogsByDate = async (date: string): Promise<string> => {
+  const snapshot = await get(ref(db, 'logs'));
+  const logs = snapshot.val();
+  const lines: string[] = [];
 
-    const ids = data.map((entry: any) => Number(entry.id)).filter((id: number) => !isNaN(id));
-    return ids;
-  } catch (error) {
-    console.error('Failed to fetch chat IDs from Google Sheet:', error);
-    return [];
+  for (const userId in logs) {
+    const entries = logs[userId];
+    for (const logId in entries) {
+      const { timestamp, message, username, first_name } = entries[logId];
+      if (timestamp?.startsWith(date)) {
+        lines.push(`[${timestamp}] (${userId}) ${first_name} (@${username || 'N/A'}): ${message}`);
+      }
+    }
   }
+
+  return lines.length ? lines.join('\n') : 'No logs found for this date.';
 };
