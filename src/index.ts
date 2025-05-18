@@ -21,7 +21,6 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Middleware to restrict private command usage
 bot.use(async (ctx, next) => {
   if (ctx.chat && isPrivateChat(ctx.chat.type)) {
     const isAllowed = await checkMembership(ctx);
@@ -30,10 +29,8 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
-// /add command
 bot.command('add', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
-
   await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
     reply_markup: {
       inline_keyboard: [[{ text: 'Open Bot', url: 'https://t.me/NeetAspirantsBot' }]],
@@ -41,16 +38,13 @@ bot.command('add', async (ctx) => {
   });
 });
 
-// /about
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
   await about()(ctx);
 });
 
-// /start
 bot.command('start', async (ctx) => {
   if (!isPrivateChat(ctx.chat.type)) return;
-
   const user = ctx.from;
   const chat = ctx.chat;
 
@@ -64,13 +58,16 @@ bot.command('start', async (ctx) => {
     const username = user?.username ? `@${user.username}` : 'N/A';
     await ctx.telegram.sendMessage(
       ADMIN_ID,
-      `*New user started the bot!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
+      `*New user started the bot!*
+\n\n*Name:* ${name}
+*Username:* ${username}
+*Chat ID:* ${chat.id}
+*Type:* ${chat.type}`,
       { parse_mode: 'Markdown' }
     );
   }
 });
 
-// /users (admin)
 bot.command('users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
   try {
@@ -87,7 +84,6 @@ bot.command('users', async (ctx) => {
   }
 });
 
-// /logs YYYY-MM-DD (admin)
 bot.command('logs', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.reply('Unauthorized');
 
@@ -95,7 +91,7 @@ bot.command('logs', async (ctx) => {
   if (!input) return ctx.reply('Please provide a date in YYYY-MM-DD format, e.g., /logs 2025-05-18');
 
   const logFile = getLogFilePath(input);
-  if (!logFile) return ctx.reply(`No logs found for ${input}`);
+  if (!logFile || !fs.existsSync(logFile)) return ctx.reply(`No logs found for ${input}`);
 
   await ctx.replyWithDocument({
     source: fs.createReadStream(logFile),
@@ -103,10 +99,8 @@ bot.command('logs', async (ctx) => {
   });
 });
 
-// /broadcast
 setupBroadcast(bot);
 
-// --- Study Search ---
 bot.on('text', async (ctx, next) => {
   let text = ctx.message?.text?.trim();
   if (!text) return;
@@ -126,33 +120,26 @@ bot.on('text', async (ctx, next) => {
       text = text.replace(`@${BOT_USERNAME}`, '').trim();
       ctx.message.text = text;
     }
-
     await studySearch()(ctx);
   } else {
     await next();
   }
 });
 
-// New chat members
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
 
     if (member.username === ctx.botInfo.username) {
-      await ctx.reply(
-        `*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`,
-        { parse_mode: 'Markdown' }
-      );
+      await ctx.reply(`*Thanks for adding me!*
+\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, { parse_mode: 'Markdown' });
     } else {
-      await ctx.reply(
-        `*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material.`,
-        { parse_mode: 'Markdown' }
-      );
+      await ctx.reply(`*Hi ${name}!* Welcome! 
+\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, { parse_mode: 'Markdown' });
     }
   }
 });
 
-// --- Message Logging & Save User ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   if (!chat?.id || !isPrivateChat(chat.type)) return;
@@ -176,13 +163,16 @@ bot.on('message', async (ctx) => {
   if (chat.id !== ADMIN_ID && !alreadyNotified) {
     await ctx.telegram.sendMessage(
       ADMIN_ID,
-      `*New user interacted!*\n\n*Name:* ${user?.first_name || 'Unknown'}\n*Username:* ${user?.username ? `@${user.username}` : 'N/A'}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
+      `*New user interacted!*
+\n\n*Name:* ${user?.first_name || 'Unknown'}
+*Username:* ${user?.username ? `@${user.username}` : 'N/A'}
+*Chat ID:* ${chat.id}
+*Type:* ${chat.type}`,
       { parse_mode: 'Markdown' }
     );
   }
 });
 
-// Refresh users (inline button)
 bot.action('refresh_users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) {
     await ctx.answerCbQuery('Unauthorized');
@@ -204,7 +194,6 @@ bot.action('refresh_users', async (ctx) => {
   }
 });
 
-// --- Vercel Export ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
 };
