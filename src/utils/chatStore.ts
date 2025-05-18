@@ -9,19 +9,17 @@ export const fetchChatIdsFromFirebase = async (): Promise<string[]> => {
 };
 
 export const getLogsByDate = async (date: string): Promise<string> => {
-  const snapshot = await get(ref(db, 'logs'));
+  const snapshot = await get(ref(db, `logs/${date}`));
   const logs = snapshot.val();
   const lines: string[] = [];
 
-  for (const userId in logs) {
-    const entries = logs[userId];
-    for (const logId in entries) {
-      const { timestamp, message, username, first_name } = entries[logId];
-      if (timestamp?.startsWith(date)) {
-        lines.push(`[${timestamp}] (${userId}) ${first_name} (@${username || 'N/A'}): ${message}`);
-      }
-    }
+  if (!logs) return 'No logs found for this date.';
+
+  for (const logId in logs) {
+    const { timestamp, message, username, first_name, chatId } = logs[logId];
+    const timeStr = new Date(timestamp).toISOString();
+    lines.push(`[${timeStr}] (${chatId}) ${first_name} (@${username || 'N/A'}): ${message}`);
   }
 
-  return lines.length ? lines.join('\n') : 'No logs found for this date.';
+  return lines.join('\n');
 };
