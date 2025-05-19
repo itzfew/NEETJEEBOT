@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { fetchChatIdsFromFirebase, getLogsByDateOrChatId } from './utils/chatStore';
+import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { about } from './commands/about';
@@ -20,7 +20,6 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 const bot = new Telegraf(BOT_TOKEN);
 
 // --- Commands ---
-
 bot.command('add', async (ctx) => {
   if (ctx.chat?.type !== 'private') return;
   await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
@@ -38,6 +37,7 @@ bot.command('about', async (ctx) => {
 bot.command('start', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
+
   const alreadyNotified = await saveToFirebase(chat);
 
   if (chat.type === 'private') {
@@ -49,6 +49,7 @@ bot.command('start', async (ctx) => {
     const name = user?.first_name || chat.title || 'Unknown';
     const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
     const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
+
     await ctx.telegram.sendMessage(
       ADMIN_ID,
       `*New ${chatTypeLabel} started the bot!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
@@ -76,17 +77,17 @@ bot.command('users', async (ctx) => {
 bot.command('logs', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return;
   const parts = ctx.message?.text?.split(' ') || [];
-  if (parts.length < 2) return ctx.reply('Usage: /logs YYYY-MM-DD or /logs <chatId>');
+  if (parts.length < 2) return ctx.reply('Usage: /logs YYYY-MM-DD');
 
-  const input = parts[1];
+  const date = parts[1];
   try {
-    const logs = await getLogsByDateOrChatId(input);
-    if (logs.startsWith('No logs')) {
+    const logs = await getLogsByDate(date);
+    if (logs === 'No logs found for this date.') {
       await ctx.reply(logs);
     } else {
       await ctx.replyWithDocument({
         source: Buffer.from(logs, 'utf-8'),
-        filename: `logs-${input}.txt`,
+        filename: `logs-${date}.txt`,
       });
     }
   } catch (err) {
@@ -95,7 +96,7 @@ bot.command('logs', async (ctx) => {
   }
 });
 
-// --- Inline text search ---
+// --- Inline Search ---
 setupBroadcast(bot);
 
 bot.on('text', async (ctx, next) => {
@@ -123,7 +124,7 @@ bot.on('text', async (ctx, next) => {
   }
 });
 
-// --- New group members welcome ---
+// --- New Group Members ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
@@ -141,32 +142,50 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- Private-only full logging and media forwarding ---
+// --- Main Logging Handler ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
   const message = ctx.message;
 
-  if (!chat?.id) return;
+  if (!chat?.id || !message) return;
+
   const alreadyNotified = await saveToFirebase(chat);
 
   if (chat.type === 'private') {
-    const isText = !!message.text;
-    const logText = isText
-      ? message.text
-      : `[${message?.media_group_id ? 'Media Group' :
-         message?.photo ? 'Photo' :
-         message?.document ? 'Document' :
-         message?.video ? 'Video' :
-         message?.voice ? 'Voice' :
-         'Non-text'} message]`;
+    let logText = '[Unknown/Unsupported message type]';
+
+    if (message.text) {
+      logText = message.text;
+    } else if (message.photo) {
+      logText = '[Photo message]';
+    } else if (message.document) {
+      logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
+    } else if (message.video) {
+      logText = '[Video message]';
+    } else if (message.voice) {
+      logText = '[Voice message]';
+    } else if (message.audio) {
+      logText = '[Audio message]';
+    } else if (message.sticker) {
+      logText = `[Sticker: ${message.sticker.emoji || 'Sticker'}]`;
+    } else if (message.contact) {
+      logText = '[Contact shared]';
+    } else if (message.location) {
+      const loc = message.location;
+      logText = `[Location: ${loc.latitude}, ${loc.longitude}]`;
+    } else if (message.poll) {
+      logText = `[Poll: ${message.poll.question}]`;
+    }
 
     await logMessage(chat.id, logText, user);
 
-    if (!isText) {
+    // Forward non-text media to admin
+    if (!message.text) {
       const name = user?.first_name || 'Unknown';
       const username = user?.username ? `@${user.username}` : 'N/A';
       const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
       const header = `*Non-text message received!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n`;
 
       try {
@@ -178,11 +197,12 @@ bot.on('message', async (ctx) => {
     }
   }
 
-  // Admin notify on first interaction
+  // Notify admin on first interaction
   if (!alreadyNotified && chat.id !== ADMIN_ID) {
     const name = user?.first_name || chat.title || 'Unknown';
     const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
     const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
+
     await ctx.telegram.sendMessage(
       ADMIN_ID,
       `*New ${chatTypeLabel} interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
@@ -191,7 +211,7 @@ bot.on('message', async (ctx) => {
   }
 });
 
-// --- Refresh inline ---
+// --- Inline Refresh ---
 bot.action('refresh_users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
 
