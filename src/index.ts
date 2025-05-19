@@ -4,7 +4,7 @@ import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { about } from './commands/about';
-import { greeting, checkMembership } from './text/greeting';
+import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
@@ -37,7 +37,6 @@ bot.command('about', async (ctx) => {
 bot.command('start', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
-
   const alreadyNotified = await saveToFirebase(chat);
 
   if (chat.type === 'private') {
@@ -96,64 +95,29 @@ bot.command('logs', async (ctx) => {
   }
 });
 
-// --- Inline Search ---
+// --- Inline Broadcast Command ---
 setupBroadcast(bot);
 
-bot.on('text', async (ctx, next) => {
-  let text = ctx.message?.text?.trim();
-  if (!text) return;
-
-  const chatType = ctx.chat?.type || '';
-  const isGroup = chatType === 'group' || chatType === 'supergroup';
-  const isPrivate = chatType === 'private';
-
-  const mentionedEntity = ctx.message.entities?.find(
-    (entity) =>
-      entity.type === 'mention' &&
-      text.slice(entity.offset, entity.offset + entity.length).toLowerCase() === `@${BOT_USERNAME.toLowerCase()}`
-  );
-
-  if (isPrivate || (isGroup && mentionedEntity)) {
-    if (mentionedEntity) {
-      text = text.replace(`@${BOT_USERNAME}`, '').trim();
-      ctx.message.text = text;
-    }
-    await studySearch()(ctx);
-  } else {
-    await next();
-  }
-});
-
-// --- New Group Members ---
-bot.on('new_chat_members', async (ctx) => {
-  for (const member of ctx.message.new_chat_members) {
-    const name = member.first_name || 'there';
-    if (member.username === ctx.botInfo.username) {
-      await ctx.reply(
-        `*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`,
-        { parse_mode: 'Markdown' }
-      );
-    } else {
-      await ctx.reply(
-        `*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material.`,
-        { parse_mode: 'Markdown' }
-      );
-    }
-  }
-});
-
-// --- Main Logging Handler ---
+// --- Main Handler: Log + Search ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
   const message = ctx.message;
 
-  if (chat.type === 'private') {
-    let logText = '[Unknown message type]';
+  if (!chat?.id || !user) return;
 
-    if (message.text) logText = message.text;
-    else if (message.photo) logText = '[Photo]';
-    else if (message.document) logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
+  const alreadyNotified = await saveToFirebase(chat);
+
+  // Logging
+  if (chat.type === 'private') {
+    let logText = '[Unknown/Unsupported message type]';
+
+    if (message.text) {
+      logText = message.text;
+    } else if (message.photo) {
+      logText = '[Photo message]';
+    } else if (message.document) {
+      logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
     } else if (message.video) {
       logText = '[Video message]';
     } else if (message.voice) {
@@ -171,7 +135,6 @@ bot.on('message', async (ctx) => {
       logText = `[Poll: ${message.poll.question}]`;
     }
 
-    // Ensure log is saved
     try {
       await logMessage(chat.id, logText, user);
     } catch (err) {
@@ -195,7 +158,23 @@ bot.on('message', async (ctx) => {
     }
   }
 
-  // Notify admin if user's first interaction
+  // Study search (text + mention)
+  const isPrivate = chat.type === 'private';
+  const isGroup = chat.type === 'group' || chat.type === 'supergroup';
+  const mentionedEntity = message.entities?.find(
+    (e) =>
+      e.type === 'mention' &&
+      message.text?.slice(e.offset, e.offset + e.length).toLowerCase() === `@${BOT_USERNAME.toLowerCase()}`
+  );
+
+  if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
+    if (mentionedEntity) {
+      ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
+    }
+    await studySearch()(ctx);
+  }
+
+  // Notify admin for first interaction
   if (!alreadyNotified && chat.id !== ADMIN_ID) {
     const name = user?.first_name || chat.title || 'Unknown';
     const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
@@ -208,10 +187,26 @@ bot.on('message', async (ctx) => {
     );
   }
 });
-// --- Inline Refresh ---
+
+// --- New Group Members ---
+bot.on('new_chat_members', async (ctx) => {
+  for (const member of ctx.message.new_chat_members) {
+    const name = member.first_name || 'there';
+    if (member.username === ctx.botInfo.username) {
+      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
+        parse_mode: 'Markdown',
+      });
+    } else {
+      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
+        parse_mode: 'Markdown',
+      });
+    }
+  }
+});
+
+// --- Refresh Inline Button ---
 bot.action('refresh_users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
-
   try {
     const chatIds = await fetchChatIdsFromFirebase();
     await ctx.editMessageText(`📊 Total interacting entities: ${chatIds.length} (refreshed)`, {
