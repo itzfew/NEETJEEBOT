@@ -143,8 +143,6 @@ bot.on('new_chat_members', async (ctx) => {
     }
   }
 });
-
-// --- Private-only logs + forward non-text ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
@@ -154,11 +152,38 @@ bot.on('message', async (ctx) => {
 
   const alreadyNotified = await saveToFirebase(chat);
 
+  // --- Log all private messages with appropriate labels ---
   if (chat.type === 'private') {
-    const logText =
-      message.text || `[${message?.media_group_id ? 'Media Group' : message?.photo ? 'Photo' : message?.document ? 'Document' : message?.video ? 'Video' : 'Non-text'} message]`;
+    let logText = '';
+
+    if (message.text) {
+      logText = message.text;
+    } else if (message.photo) {
+      logText = '[Photo message]';
+    } else if (message.document) {
+      logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
+    } else if (message.video) {
+      logText = '[Video message]';
+    } else if (message.voice) {
+      logText = '[Voice message]';
+    } else if (message.audio) {
+      logText = '[Audio message]';
+    } else if (message.sticker) {
+      logText = `[Sticker: ${message.sticker.emoji || 'Sticker'}]`;
+    } else if (message.contact) {
+      logText = '[Contact shared]';
+    } else if (message.location) {
+      const loc = message.location;
+      logText = `[Location: ${loc.latitude}, ${loc.longitude}]`;
+    } else if (message.poll) {
+      logText = `[Poll: ${message.poll.question}]`;
+    } else {
+      logText = '[Unknown/Unsupported message type]';
+    }
+
     await logMessage(chat.id, logText, user);
 
+    // Forward media to admin
     if (!message.text) {
       const name = user?.first_name || 'Unknown';
       const username = user?.username ? `@${user.username}` : 'N/A';
@@ -175,7 +200,7 @@ bot.on('message', async (ctx) => {
     }
   }
 
-  // Admin notify on first message (any chat type)
+  // Notify admin if it's the user's first interaction
   if (!alreadyNotified && chat.id !== ADMIN_ID) {
     const name = user?.first_name || chat.title || 'Unknown';
     const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
@@ -188,6 +213,7 @@ bot.on('message', async (ctx) => {
     );
   }
 });
+
 
 // --- Refresh inline ---
 bot.action('refresh_users', async (ctx) => {
