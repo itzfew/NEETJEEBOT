@@ -1,14 +1,18 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
+
 import { about } from './commands/about';
-import { greeting } from './text/greeting';
+import { greeting, checkMembership } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
-import { checkMembership, isPrivateChat } from './utils/checkMembership'; // Make sure these utilities exist
+
+// Helper to check private chat type
+const isPrivateChat = (type?: string) => type === 'private';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
@@ -16,15 +20,16 @@ const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
+
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Middleware to restrict private chat commands to members
+// Middleware to restrict private chat commands to only members of required channel/group
 bot.use(async (ctx, next) => {
   if (ctx.chat && isPrivateChat(ctx.chat.type)) {
     const isAllowed = await checkMembership(ctx);
-    if (!isAllowed) return;
+    if (!isAllowed) return; // user not allowed, do not proceed
   }
   await next();
 });
@@ -32,7 +37,7 @@ bot.use(async (ctx, next) => {
 // --- Commands ---
 
 bot.command('add', async (ctx) => {
-  if (ctx.chat?.type !== 'private') return;
+  if (!isPrivateChat(ctx.chat?.type)) return;
   await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
     reply_markup: {
       inline_keyboard: [[{ text: 'Open Bot', url: 'https://t.me/NeetAspirantsBot' }]],
@@ -41,23 +46,25 @@ bot.command('add', async (ctx) => {
 });
 
 bot.command('about', async (ctx) => {
-  if (ctx.chat?.type !== 'private') return;
+  if (!isPrivateChat(ctx.chat?.type)) return;
   await about()(ctx);
 });
 
 bot.command('start', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
+  if (!chat || !user) return;
+
   const alreadyNotified = await saveToFirebase(chat);
 
-  if (chat.type === 'private') {
+  if (isPrivateChat(chat.type)) {
     await greeting()(ctx);
     await logMessage(chat.id, '/start', user);
   }
 
   if (!alreadyNotified && chat.id !== ADMIN_ID) {
-    const name = user?.first_name || chat.title || 'Unknown';
-    const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
+    const name = user.first_name || chat.title || 'Unknown';
+    const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
     const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
 
     await ctx.telegram.sendMessage(
@@ -89,9 +96,8 @@ bot.command('users', async (ctx) => {
 bot.command('logs', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return;
   const parts = ctx.message?.text?.split(' ') || [];
-  if (parts.length < 2) {
-    return ctx.reply("Usage:\n/logs YYYY-MM-DD\nor\n/logs <chatId>");
-  }
+  if (parts.length < 2)
+    return ctx.reply("Usage: /logs <YYYY-MM-DD> or /logs <chatid>");
 
   const dateOrChatId = parts[1];
   try {
@@ -110,33 +116,46 @@ bot.command('logs', async (ctx) => {
   }
 });
 
-// Admin: Broadcast
+// Admin: /broadcast
 setupBroadcast(bot);
 
-// --- Message Handler ---
+// --- Main Handler: Log + Search ---
+
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
   const message = ctx.message;
 
   if (!chat?.id || !user) return;
+
   const alreadyNotified = await saveToFirebase(chat);
 
-  // Log private messages
-  if (chat.type === 'private') {
+  // Logging
+  if (isPrivateChat(chat.type)) {
     let logText = '[Unknown/Unsupported message type]';
-    const m = message;
 
-    if (m.text) logText = m.text;
-    else if (m.photo) logText = '[Photo message]';
-    else if (m.document) logText = `[Document: ${m.document.file_name || 'Unnamed'}]`;
-    else if (m.video) logText = '[Video message]';
-    else if (m.voice) logText = '[Voice message]';
-    else if (m.audio) logText = '[Audio message]';
-    else if (m.sticker) logText = `[Sticker: ${m.sticker.emoji || 'Sticker'}]`;
-    else if (m.contact) logText = '[Contact shared]';
-    else if (m.location) logText = `[Location: ${m.location.latitude}, ${m.location.longitude}]`;
-    else if (m.poll) logText = `[Poll: ${m.poll.question}]`;
+    if (message.text) {
+      logText = message.text;
+    } else if (message.photo) {
+      logText = '[Photo message]';
+    } else if (message.document) {
+      logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
+    } else if (message.video) {
+      logText = '[Video message]';
+    } else if (message.voice) {
+      logText = '[Voice message]';
+    } else if (message.audio) {
+      logText = '[Audio message]';
+    } else if (message.sticker) {
+      logText = `[Sticker: ${message.sticker.emoji || 'Sticker'}]`;
+    } else if (message.contact) {
+      logText = '[Contact shared]';
+    } else if (message.location) {
+      const loc = message.location;
+      logText = `[Location: ${loc.latitude}, ${loc.longitude}]`;
+    } else if (message.poll) {
+      logText = `[Poll: ${message.poll.question}]`;
+    }
 
     try {
       await logMessage(chat.id, logText, user);
@@ -144,13 +163,14 @@ bot.on('message', async (ctx) => {
       console.error('Failed to log message:', err);
     }
 
-    // Forward to admin
-    if (!m.text) {
+    // Forward non-text messages to admin
+    if (!message.text) {
       const name = user.first_name || 'Unknown';
       const username = user.username ? `@${user.username}` : 'N/A';
       const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
       const header = `*Non-text message received!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n`;
+
       try {
         await ctx.telegram.sendMessage(ADMIN_ID, header, { parse_mode: 'Markdown' });
         await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
@@ -160,21 +180,24 @@ bot.on('message', async (ctx) => {
     }
   }
 
-  // Study search logic
-  const isPrivate = chat.type === 'private';
+  // Study search (text + mention)
+  const isPrivate = isPrivateChat(chat.type);
   const isGroup = chat.type === 'group' || chat.type === 'supergroup';
-  const mentioned = message.entities?.some(
+  const mentionedEntity = message.entities?.find(
     (e) =>
       e.type === 'mention' &&
-      message.text?.slice(e.offset, e.offset + e.length).toLowerCase() === `@${BOT_USERNAME.toLowerCase()}`
+      message.text?.slice(e.offset, e.offset + e.length).toLowerCase() ===
+        `@${BOT_USERNAME.toLowerCase()}`
   );
 
-  if (message.text && (isPrivate || (isGroup && mentioned))) {
-    ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
+  if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
+    if (mentionedEntity) {
+      ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
+    }
     await studySearch()(ctx);
   }
 
-  // Notify admin
+  // Notify admin for first interaction
   if (!alreadyNotified && chat.id !== ADMIN_ID) {
     const name = user.first_name || chat.title || 'Unknown';
     const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
@@ -188,11 +211,11 @@ bot.on('message', async (ctx) => {
   }
 });
 
-// New group members
+// --- New Group Members ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
-    if (member.username === ctx.botInfo.username) {
+    if (member.username === ctx.botInfo?.username) {
       await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
         parse_mode: 'Markdown',
       });
@@ -204,7 +227,7 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// Refresh button
+// --- Refresh Inline Button ---
 bot.action('refresh_users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
   try {
@@ -222,7 +245,7 @@ bot.action('refresh_users', async (ctx) => {
   }
 });
 
-// Vercel handler
+// --- Vercel Export ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
 };
