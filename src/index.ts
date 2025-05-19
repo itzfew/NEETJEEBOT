@@ -148,10 +148,11 @@ bot.on('message', async (ctx) => {
   const user = ctx.from;
   const message = ctx.message;
 
-  if (!chat?.id || !message) return;
+  if (!chat?.id) return;
 
   const alreadyNotified = await saveToFirebase(chat);
 
+  // Log all private messages
   if (chat.type === 'private') {
     let logText = '[Unknown/Unsupported message type]';
 
@@ -178,9 +179,14 @@ bot.on('message', async (ctx) => {
       logText = `[Poll: ${message.poll.question}]`;
     }
 
-    await logMessage(chat.id, logText, user);
+    // Ensure log is saved
+    try {
+      await logMessage(chat.id, logText, user);
+    } catch (err) {
+      console.error('Failed to log message:', err);
+    }
 
-    // Forward non-text media to admin
+    // Forward non-text messages to admin
     if (!message.text) {
       const name = user?.first_name || 'Unknown';
       const username = user?.username ? `@${user.username}` : 'N/A';
@@ -197,7 +203,7 @@ bot.on('message', async (ctx) => {
     }
   }
 
-  // Notify admin on first interaction
+  // Notify admin if user's first interaction
   if (!alreadyNotified && chat.id !== ADMIN_ID) {
     const name = user?.first_name || chat.title || 'Unknown';
     const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
@@ -210,7 +216,6 @@ bot.on('message', async (ctx) => {
     );
   }
 });
-
 // --- Inline Refresh ---
 bot.action('refresh_users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
