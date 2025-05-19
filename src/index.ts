@@ -18,6 +18,14 @@ if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
+// Middleware to restrict private command usage
+bot.use(async (ctx, next) => {
+  if (ctx.chat && isPrivateChat(ctx.chat.type)) {
+    const isAllowed = await checkMembership(ctx);
+    if (!isAllowed) return;
+  }
+  await next();
+});
 
 // --- Commands ---
 bot.command('add', async (ctx) => {
@@ -57,6 +65,7 @@ bot.command('start', async (ctx) => {
   }
 });
 
+// Admin: /users
 bot.command('users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
   try {
@@ -73,10 +82,11 @@ bot.command('users', async (ctx) => {
   }
 });
 
+// Admin: /logs
 bot.command('logs', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return;
   const parts = ctx.message?.text?.split(' ') || [];
-  if (parts.length < 2) return ctx.reply('Usage: /logs YYYY-MM-DD');
+  if (parts.length < 2) return ctx.reply('Usage: /logs YYYY-MM-DD' or 'chatid');
 
   const date = parts[1];
   try {
@@ -94,7 +104,7 @@ bot.command('logs', async (ctx) => {
     await ctx.reply('❌ Error fetching logs.');
   }
 });
-
+// Admin: /broadcast
 // --- Inline Broadcast Command ---
 setupBroadcast(bot);
 
