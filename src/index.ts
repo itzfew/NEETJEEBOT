@@ -148,20 +148,12 @@ bot.on('message', async (ctx) => {
   const user = ctx.from;
   const message = ctx.message;
 
-  if (!chat?.id) return;
-
-  const alreadyNotified = await saveToFirebase(chat);
-
-  // Log all private messages
   if (chat.type === 'private') {
-    let logText = '[Unknown/Unsupported message type]';
+    let logText = '[Unknown message type]';
 
-    if (message.text) {
-      logText = message.text;
-    } else if (message.photo) {
-      logText = '[Photo message]';
-    } else if (message.document) {
-      logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
+    if (message.text) logText = message.text;
+    else if (message.photo) logText = '[Photo]';
+    else if (message.document) logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
     } else if (message.video) {
       logText = '[Video message]';
     } else if (message.voice) {
