@@ -8,6 +8,7 @@ import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
+import { checkMembership, isPrivateChat } from './utils/checkMembership'; // Make sure these utilities exist
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
@@ -18,7 +19,8 @@ if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
-// Middleware to restrict private command usage
+
+// Middleware to restrict private chat commands to members
 bot.use(async (ctx, next) => {
   if (ctx.chat && isPrivateChat(ctx.chat.type)) {
     const isAllowed = await checkMembership(ctx);
@@ -28,6 +30,7 @@ bot.use(async (ctx, next) => {
 });
 
 // --- Commands ---
+
 bot.command('add', async (ctx) => {
   if (ctx.chat?.type !== 'private') return;
   await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
@@ -86,17 +89,19 @@ bot.command('users', async (ctx) => {
 bot.command('logs', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return;
   const parts = ctx.message?.text?.split(' ') || [];
-  if (parts.length < 2) return ctx.reply('Usage: /logs YYYY-MM-DD' or 'chatid');
+  if (parts.length < 2) {
+    return ctx.reply("Usage:\n/logs YYYY-MM-DD\nor\n/logs <chatId>");
+  }
 
-  const date = parts[1];
+  const dateOrChatId = parts[1];
   try {
-    const logs = await getLogsByDate(date);
+    const logs = await getLogsByDate(dateOrChatId);
     if (logs === 'No logs found for this date.') {
       await ctx.reply(logs);
     } else {
       await ctx.replyWithDocument({
         source: Buffer.from(logs, 'utf-8'),
-        filename: `logs-${date}.txt`,
+        filename: `logs-${dateOrChatId}.txt`,
       });
     }
   } catch (err) {
@@ -104,46 +109,34 @@ bot.command('logs', async (ctx) => {
     await ctx.reply('❌ Error fetching logs.');
   }
 });
-// Admin: /broadcast
-// --- Inline Broadcast Command ---
+
+// Admin: Broadcast
 setupBroadcast(bot);
 
-// --- Main Handler: Log + Search ---
+// --- Message Handler ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
   const message = ctx.message;
 
   if (!chat?.id || !user) return;
-
   const alreadyNotified = await saveToFirebase(chat);
 
-  // Logging
+  // Log private messages
   if (chat.type === 'private') {
     let logText = '[Unknown/Unsupported message type]';
+    const m = message;
 
-    if (message.text) {
-      logText = message.text;
-    } else if (message.photo) {
-      logText = '[Photo message]';
-    } else if (message.document) {
-      logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
-    } else if (message.video) {
-      logText = '[Video message]';
-    } else if (message.voice) {
-      logText = '[Voice message]';
-    } else if (message.audio) {
-      logText = '[Audio message]';
-    } else if (message.sticker) {
-      logText = `[Sticker: ${message.sticker.emoji || 'Sticker'}]`;
-    } else if (message.contact) {
-      logText = '[Contact shared]';
-    } else if (message.location) {
-      const loc = message.location;
-      logText = `[Location: ${loc.latitude}, ${loc.longitude}]`;
-    } else if (message.poll) {
-      logText = `[Poll: ${message.poll.question}]`;
-    }
+    if (m.text) logText = m.text;
+    else if (m.photo) logText = '[Photo message]';
+    else if (m.document) logText = `[Document: ${m.document.file_name || 'Unnamed'}]`;
+    else if (m.video) logText = '[Video message]';
+    else if (m.voice) logText = '[Voice message]';
+    else if (m.audio) logText = '[Audio message]';
+    else if (m.sticker) logText = `[Sticker: ${m.sticker.emoji || 'Sticker'}]`;
+    else if (m.contact) logText = '[Contact shared]';
+    else if (m.location) logText = `[Location: ${m.location.latitude}, ${m.location.longitude}]`;
+    else if (m.poll) logText = `[Poll: ${m.poll.question}]`;
 
     try {
       await logMessage(chat.id, logText, user);
@@ -151,14 +144,13 @@ bot.on('message', async (ctx) => {
       console.error('Failed to log message:', err);
     }
 
-    // Forward non-text messages to admin
-    if (!message.text) {
-      const name = user?.first_name || 'Unknown';
-      const username = user?.username ? `@${user.username}` : 'N/A';
+    // Forward to admin
+    if (!m.text) {
+      const name = user.first_name || 'Unknown';
+      const username = user.username ? `@${user.username}` : 'N/A';
       const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
       const header = `*Non-text message received!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n`;
-
       try {
         await ctx.telegram.sendMessage(ADMIN_ID, header, { parse_mode: 'Markdown' });
         await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
@@ -168,26 +160,24 @@ bot.on('message', async (ctx) => {
     }
   }
 
-  // Study search (text + mention)
+  // Study search logic
   const isPrivate = chat.type === 'private';
   const isGroup = chat.type === 'group' || chat.type === 'supergroup';
-  const mentionedEntity = message.entities?.find(
+  const mentioned = message.entities?.some(
     (e) =>
       e.type === 'mention' &&
       message.text?.slice(e.offset, e.offset + e.length).toLowerCase() === `@${BOT_USERNAME.toLowerCase()}`
   );
 
-  if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
-    if (mentionedEntity) {
-      ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
-    }
+  if (message.text && (isPrivate || (isGroup && mentioned))) {
+    ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
     await studySearch()(ctx);
   }
 
-  // Notify admin for first interaction
+  // Notify admin
   if (!alreadyNotified && chat.id !== ADMIN_ID) {
-    const name = user?.first_name || chat.title || 'Unknown';
-    const username = user?.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
+    const name = user.first_name || chat.title || 'Unknown';
+    const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
     const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
 
     await ctx.telegram.sendMessage(
@@ -198,7 +188,7 @@ bot.on('message', async (ctx) => {
   }
 });
 
-// --- New Group Members ---
+// New group members
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
@@ -214,7 +204,7 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- Refresh Inline Button ---
+// Refresh button
 bot.action('refresh_users', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
   try {
@@ -232,7 +222,7 @@ bot.action('refresh_users', async (ctx) => {
   }
 });
 
-// --- Vercel Export ---
+// Vercel handler
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
 };
