@@ -348,5 +348,17 @@
     { "label": "SL Arora Physics Vol 1", "key": "sl-arora-physics-vol-1" },
     { "label": "SL Arora Physics Vol 2", "key": "sl-arora-physics-vol-2" }
   ]
+},
+  {
+  "title": "PW / Physics Wallah Modules",
+  "items": [
+    { "label": "Physical Chemistry Module", "key": "pw-module-physical-chemistry" },
+    { "label": "Organic Chemistry Module", "key": "pw-module-organic-chemistry" },
+    { "label": "Inorganic Chemistry Module", "key": "pw-module-inorganic-chemistry" },
+    { "label": "11th Biology Module", "key": "pw-module-biology-11" },
+    { "label": "12th Biology Module", "key": "pw-module-biology-12" },
+    { "label": "11th Physics Module", "key": "pw-module-physics-11" },
+    { "label": "12th Physics Module", "key": "pw-module-physics-12" }
+  ]
 }
 ]
