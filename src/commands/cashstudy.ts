@@ -1,6 +1,6 @@
 import { Context } from 'telegraf';
 import { Cashfree } from 'cashfree-pg'; // Cashfree SDK
-import material from '.../data/material.json';
+import material from '../../data/material.json'; 
 import { saveToFirebase } from './utils/saveToFirebase';
 import { db } from './utils/firebase';
 import { get, ref, set } from 'firebase/database';
