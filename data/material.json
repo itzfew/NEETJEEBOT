@@ -360,5 +360,49 @@
     { "label": "11th Physics Module", "key": "pw-module-physics-11" },
     { "label": "12th Physics Module", "key": "pw-module-physics-12" }
   ]
+},
+  {
+  "title": "Arjuna Modules (English)",
+  "items": [
+    { "label": "Arjuna Chemistry-1", "key": "arjuna-chemistry-1" },
+    { "label": "Arjuna Chemistry-2", "key": "arjuna-chemistry-2" },
+    { "label": "Arjuna Chemistry-3", "key": "arjuna-chemistry-3" },
+    { "label": "Arjuna Physics", "key": "arjuna-physics" },
+    { "label": "Arjuna Zoology", "key": "arjuna-zoology" },
+    { "label": "Arjuna Zoology-2", "key": "arjuna-zoology-2" },
+    { "label": "Arjuna Botany", "key": "arjuna-botany" },
+    { "label": "Arjuna Botany-1", "key": "arjuna-botany-1" },
+    { "label": "Arjuna Botany-2", "key": "arjuna-botany-2" }
+  ]
+},
+{
+  "title": "Arjuna Modules (Hindi)",
+  "items": [
+    { "label": "Arjuna Chemistry-1 Hindi", "key": "arjuna-chemistry-1-hindi" },
+    { "label": "Arjuna Chemistry-2 Hindi", "key": "arjuna-chemistry-2-hindi" },
+    { "label": "Arjuna Chemistry-3 Hindi", "key": "arjuna-chemistry-3-hindi" },
+    { "label": "Arjuna Physics-1 Hindi", "key": "arjuna-physics-1-hindi" },
+    { "label": "Arjuna Physics-2 Hindi", "key": "arjuna-physics-2-hindi" },
+    { "label": "Arjuna Physics-3 Hindi", "key": "arjuna-physics-3-hindi" },
+    { "label": "Arjuna Physics-4 Hindi", "key": "arjuna-physics-4-hindi" },
+    { "label": "Arjuna Physics-5 Hindi", "key": "arjuna-physics-5-hindi" },
+    { "label": "Arjuna Zoology-1 Hindi", "key": "arjuna-zoology-1-hindi" },
+    { "label": "Arjuna Zoology-2 Hindi", "key": "arjuna-zoology-2-hindi" },
+    { "label": "Arjuna Zoology-3 Hindi", "key": "arjuna-zoology-3-hindi" },
+    { "label": "Arjuna Zoology-4 Hindi", "key": "arjuna-zoology-4-hindi" },
+    { "label": "Arjuna Botany-1 Hindi", "key": "arjuna-botany-1-hindi" },
+    { "label": "Arjuna Botany-2 Hindi", "key": "arjuna-botany-2-hindi" },
+    { "label": "Arjuna Botany-3 Hindi", "key": "arjuna-botany-3-hindi" },
+    { "label": "Arjuna Botany-4 Hindi", "key": "arjuna-botany-4-hindi" }
+  ]
+},
+{
+  "title": "Lakshya Modules",
+  "items": [
+    { "label": "Lakshya Zoology", "key": "lakshya-zoology" },
+    { "label": "Lakshya Botany", "key": "lakshya-botany" },
+    { "label": "Lakshya Physics", "key": "lakshya-physics" },
+    { "label": "Lakshya Chemistry", "key": "lakshya-chemistry" }
+  ]
 }
 ]
