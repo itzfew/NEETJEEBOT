@@ -4,7 +4,9 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
-import { translateCommand } from './commands/translate';
+import { handleTranslateCommand } from './commands/translate';
+
+
 import { about } from './commands/about';
 import { greeting, checkMembership } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
@@ -44,7 +46,7 @@ bot.command('add', async (ctx) => {
     },
   });
 });
-bot.command('translate', translateCommand);
+bot.command('translate', handleTranslateCommand);
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
   await about()(ctx);
