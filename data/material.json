@@ -362,7 +362,7 @@
   ]
 },
   {
-  "title": "Arjuna Modules (English)",
+  "title": "Arjuna pw Modules (English)",
   "items": [
     { "label": "Arjuna Chemistry-1", "key": "arjuna-chemistry-1" },
     { "label": "Arjuna Chemistry-2", "key": "arjuna-chemistry-2" },
@@ -376,7 +376,7 @@
   ]
 },
 {
-  "title": "Arjuna Modules (Hindi)",
+  "title": "Arjuna pw modules (Hindi)",
   "items": [
     { "label": "Arjuna Chemistry-1 Hindi", "key": "arjuna-chemistry-1-hindi" },
     { "label": "Arjuna Chemistry-2 Hindi", "key": "arjuna-chemistry-2-hindi" },
@@ -397,12 +397,12 @@
   ]
 },
 {
-  "title": "Lakshya Modules",
+  "title": "Lakshya pw Modules (hindi) ",
   "items": [
-    { "label": "Lakshya Zoology", "key": "lakshya-zoology" },
-    { "label": "Lakshya Botany", "key": "lakshya-botany" },
-    { "label": "Lakshya Physics", "key": "lakshya-physics" },
-    { "label": "Lakshya Chemistry", "key": "lakshya-chemistry" }
+    { "label": "Lakshya Zoology Hindi", "key": "lakshya-zoology" },
+    { "label": "Lakshya Botany Hindi", "key": "lakshya-botany" },
+    { "label": "Lakshya Physics Hindi", "key": "lakshya-physics" },
+    { "label": "Lakshya Chemistry Hindi ", "key": "lakshya-chemistry" }
   ]
 }
 ]
