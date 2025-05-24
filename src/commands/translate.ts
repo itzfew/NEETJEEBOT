@@ -1,5 +1,6 @@
 // src/commands/translate.ts
 import { Context } from 'telegraf';
+import fetch from 'node-fetch'; // ensure this is installed: npm i node-fetch
 
 export async function translateCommand(ctx: Context) {
   const messageText = ctx.message?.text?.split(' ').slice(1).join(' ')?.trim();
@@ -26,21 +27,22 @@ export async function translateCommand(ctx: Context) {
 
     const data = await res.json();
 
-    if (!data.translatedText) {
-      throw new Error("No translation found");
+    if (!data || !data.translatedText) {
+      console.error("Unexpected response from LibreTranslate:", data);
+      return ctx.reply('Sorry, translation failed due to an unexpected response.');
     }
 
-    const alternatives = data.alternatives?.length
-      ? `\n\n**Alternatives:**\n- ${data.alternatives.join('\n- ')}`
+    const alternatives = Array.isArray(data.alternatives)
+      ? `\n\n*Alternatives:*\n- ${data.alternatives.join('\n- ')}`
       : '';
 
     const detectedLang = data.detectedLanguage?.language || 'unknown';
 
-    await ctx.replyWithMarkdown(
-      `**Detected Language:** ${detectedLang.toUpperCase()}\n\n**Translation:**\n${data.translatedText}${alternatives}`
+    return ctx.replyWithMarkdown(
+      `*Detected Language:* ${detectedLang.toUpperCase()}\n\n*Translation:*\n${data.translatedText}${alternatives}`
     );
   } catch (err) {
     console.error('Translation Error:', err);
-    await ctx.reply('Sorry, translation failed. Please try again later.');
+    return ctx.reply('Sorry, translation failed. Please try again later.');
   }
 }
