@@ -8,24 +8,30 @@ interface MaterialItem {
   key: string;
   telegramLink: string;
   shortenedLink: string | null;
+  matchScore?: number; // New field to store match quality
 }
 
+// Cache for shortened links
 const linkCache = new Map<string, string>();
 let accessToken: string | null = null;
 const ADRINO_API_KEY = '5a2539904639474b5f3da41f528199204eb76f65';
 
+// -------------------- Helpers --------------------
 function createTelegramLink(key: string): string {
   return `https://t.me/Material_eduhubkmrbot?start=${key}`;
 }
 
 async function shortenLink(link: string, alias: string): Promise<string> {
-  if (linkCache.has(alias)) return linkCache.get(alias)!;
+  if (linkCache.has(alias)) {
+    return linkCache.get(alias)!;
+  }
 
   try {
     if (alias.length > 30) alias = alias.substring(0, 30);
     const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`;
     const res = await fetch(url);
     const data = await res.json();
+
     if (data.status === 'success') {
       linkCache.set(alias, data.shortenedUrl);
       return data.shortenedUrl;
@@ -37,16 +43,66 @@ async function shortenLink(link: string, alias: string): Promise<string> {
   }
 }
 
-function similarity(a: string, b: string): number {
-  a = a.toLowerCase();
-  b = b.toLowerCase();
-  const wordsA = new Set(a.split(/\s+/));
-  const wordsB = new Set(b.split(/\s+/));
-  const common = [...wordsA].filter(w => wordsB.has(w)).length;
-  return common / Math.max(wordsA.size, wordsB.size);
+// New improved matching function with tiered scoring
+function calculateMatchScore(query: string, item: MaterialItem): number {
+  const queryParts = query.toLowerCase().split(/\s+/).filter(p => p.length > 0);
+  const text = `${item.title} ${item.label}`.toLowerCase();
+  
+  // Exact match check
+  if (text.includes(query.toLowerCase())) return 1.0;
+  
+  // Check for all query parts existing in text (ordered or not)
+  const allPartsExist = queryParts.every(part => text.includes(part));
+  if (allPartsExist) return 0.9;
+  
+  // Check for partial matches
+  let matchedParts = 0;
+  for (const part of queryParts) {
+    if (text.includes(part)) matchedParts++;
+  }
+  
+  // If most parts match, return high score
+  if (matchedParts / queryParts.length >= 0.8) return 0.8;
+  if (matchedParts / queryParts.length >= 0.6) return 0.6;
+  
+  // Check for fuzzy matches using Levenshtein distance
+  const levenshteinDistance = (a: string, b: string): number => {
+    const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+    for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
+    for (let j = 1; j <= b.length; j++) {
+      for (let i = 1; i <= a.length; i++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,
+          matrix[j - 1][i] + 1,
+          matrix[j - 1][i - 1] + cost
+        );
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+
+  // Calculate fuzzy match score
+  let fuzzyScore = 0;
+  for (const part of queryParts) {
+    let bestDistance = Infinity;
+    for (const word of text.split(/\s+/)) {
+      const distance = levenshteinDistance(part, word);
+      if (distance < bestDistance) bestDistance = distance;
+    }
+    // Normalize score based on word length
+    const normalizedScore = Math.max(0, (part.length - bestDistance) / part.length);
+    fuzzyScore += normalizedScore;
+  }
+  fuzzyScore /= queryParts.length;
+  
+  return Math.max(fuzzyScore, 0.3); // Minimum score threshold
 }
 
+// -------------------- Prepare & Match --------------------
 let materialData: MaterialItem[] = [];
+
 async function initializeMaterialData(): Promise<void> {
   const output: MaterialItem[] = [];
 
@@ -73,35 +129,28 @@ async function getShortenedLink(item: MaterialItem): Promise<string> {
   return shortLink;
 }
 
-// Enhanced matching by score buckets
-function matchMaterialRanked(query: string): { label: string; items: MaterialItem[] }[] {
-  const results: Record<string, MaterialItem[]> = {
-    'Exact Match': [],
-    'Very Close Match': [],
-    'Good Match': [],
-    'Partial Match': [],
-  };
+function matchMaterial(query: string): MaterialItem[] {
+  // Calculate scores for all items
+  const scoredItems = materialData.map(item => ({
+    ...item,
+    matchScore: calculateMatchScore(query, item)
+  }));
 
-  const queryLower = query.toLowerCase();
-
-  for (const item of materialData) {
-    const fullText = `${item.title} ${item.label}`.toLowerCase();
-
-    if (fullText === queryLower) {
-      results['Exact Match'].push(item);
-    } else {
-      const score = similarity(queryLower, fullText);
-      if (score >= 0.9) results['Very Close Match'].push(item);
-      else if (score >= 0.75) results['Good Match'].push(item);
-      else if (score >= 0.5) results['Partial Match'].push(item);
+  // Filter items with score >= 0.3 (adjust threshold as needed)
+  const matches = scoredItems.filter(item => item.matchScore >= 0.3);
+  
+  // Sort by match score (descending) then by title/label
+  matches.sort((a, b) => {
+    if (b.matchScore! !== a.matchScore!) {
+      return b.matchScore! - a.matchScore!;
     }
-  }
+    return a.title.localeCompare(b.title) || a.label.localeCompare(b.label);
+  });
 
-  return Object.entries(results)
-    .filter(([, items]) => items.length > 0)
-    .map(([label, items]) => ({ label, items }));
+  return matches;
 }
 
+// -------------------- Telegraph Integration --------------------
 const defaultInstructions = [
   {
     tag: 'p',
@@ -116,7 +165,7 @@ const defaultInstructions = [
   },
   {
     tag: 'p',
-    children: ['📚 Join more recommended bots:'],
+    children: ['📚 Join more recommended bots:']
   },
   {
     tag: 'ul',
@@ -124,80 +173,140 @@ const defaultInstructions = [
       {
         tag: 'li',
         children: [
-          { tag: 'a', attrs: { href: 'https://t.me/Material_eduhubkmrbot' }, children: ['@Material_eduhubkmrbot'] },
+          {
+            tag: 'a',
+            attrs: { href: 'https://t.me/Material_eduhubkmrbot' },
+            children: ['@Material_eduhubkmrbot'],
+          },
           ' - Study materials',
         ],
       },
-      {
-        tag: 'li',
-        children: [
-          { tag: 'a', attrs: { href: 'https://t.me/EduhubKMR_bot' }, children: ['@EduhubKMR_bot'] },
-          ' - QuizBot',
-        ],
-      },
-      {
-        tag: 'li',
-        children: [
-          { tag: 'a', attrs: { href: 'https://t.me/NEETPW01' }, children: ['@NEETPW01'] },
-          ' - Group For Discussion',
-        ],
-      },
-      {
-        tag: 'li',
-        children: [
-          { tag: 'a', attrs: { href: 'https://t.me/NEETUG_26' }, children: ['@NEETUG_26'] },
-          ' - NEET JEE Channel',
-        ],
-      },
-    ],
+      { 
+        tag: 'li', 
+        children: [ 
+          { 
+            tag: 'a', 
+            attrs: { href: 'https://t.me/EduhubKMR_bot' }, 
+            children: ['@EduhubKMR_bot'], 
+          }, 
+          ' - QuizBot', 
+        ], 
+      }, 
+      { 
+        tag: 'li', 
+        children: [ 
+          { 
+            tag: 'a', 
+            attrs: { href: 'https://t.me/NEETPW01' }, 
+            children: ['@NEETPW01'], 
+          }, 
+          ' - Group For Discussion', 
+        ], 
+      }, 
+      { 
+        tag: 'li', 
+        children: [ 
+          { 
+            tag: 'a', 
+            attrs: { href: 'https://t.me/NEETUG_26' }, 
+            children: ['@NEETUG_26'], 
+          }, 
+          ' - NEET JEE Channel', 
+        ], 
+      }, 
+    ], 
   },
 ];
 
-async function createTelegraphAccount() {
-  const res = await fetch('https://api.telegra.ph/createAccount', {
-    method: 'POST',
-    body: new URLSearchParams({
-      short_name: 'studybot',
-      author_name: 'Study Bot',
-    }),
-  });
-  const data = await res.json();
-  if (data.ok) {
-    accessToken = data.result.access_token;
-  } else {
-    throw new Error(data.error || 'Telegraph account creation failed');
+async function createTelegraphAccount(): Promise<void> {
+  try {
+    const res = await fetch('https://api.telegra.ph/createAccount', {
+      method: 'POST',
+      body: new URLSearchParams({
+        short_name: 'studybot',
+        author_name: 'Study Bot',
+      }),
+    });
+
+    const data = await res.json();
+    if (data.ok) {
+      accessToken = data.result.access_token;
+    } else {
+      throw new Error(data.error || 'Telegraph account creation failed');
+    }
+  } catch (error) {
+    console.error('Failed to create Telegraph account:', error);
+    throw error;
   }
 }
 
-async function createTelegraphPageForMatches(query: string, matchGroups: { label: string; items: MaterialItem[] }[]): Promise<string> {
-  if (!accessToken) await createTelegraphAccount();
+async function createTelegraphPageForMatches(query: string, matches: MaterialItem[]): Promise<string> {
+  if (!accessToken) {
+    await createTelegraphAccount();
+  }
 
-  const allItems = matchGroups.flatMap(g => g.items);
-  const shortenedLinks = await Promise.all(allItems.map(getShortenedLink));
+  // Get all shortened links in parallel
+  const links = await Promise.all(
+    matches.map(item => getShortenedLink(item))
+  );
 
-  let linkIndex = 0;
+  // Group by match score for better presentation
+  const scoreGroups = new Map<number, MaterialItem[]>();
+  matches.forEach((item, index) => {
+    const roundedScore = Math.round(item.matchScore! * 10) / 10;
+    if (!scoreGroups.has(roundedScore)) {
+      scoreGroups.set(roundedScore, []);
+    }
+    scoreGroups.get(roundedScore)!.push({...item, shortenedLink: links[index]});
+  });
+
   const content = [
-    { tag: 'h3', children: [`Results for: "${query}"`] },
-    ...matchGroups.flatMap(group => [
-      { tag: 'h4', children: [group.label] },
-      {
-        tag: 'ul',
-        children: group.items.map(item => ({
-          tag: 'li',
+    {
+      tag: 'h3',
+      children: [`Results for: "${query}"`]
+    },
+    {
+      tag: 'p',
+      children: [`Found ${matches.length} study materials:`]
+    },
+    // Add sections for each match quality tier
+    ...[...scoreGroups.entries()].sort((a, b) => b[0] - a[0]).map(([score, items]) => ({
+      tag: 'div',
+      children: [
+        {
+          tag: 'h4',
           children: [
-            '• ',
-            {
-              tag: 'a',
-              attrs: { href: shortenedLinks[linkIndex++], target: '_blank' },
-              children: [item.label],
-            },
-            ` (${item.title})`,
-          ],
-        })),
-      },
-    ]),
-    { tag: 'hr' },
-    { tag: 'h4', children: ['ℹ️ Resources & Instructions'] },
+            score === 1 ? '🔍 Exact matches' : 
+            score >= 0.9 ? '🔍 Very close matches' :
+            score >= 0.8 ? '🔍 Close matches' :
+            score >= 0.6 ? '🔍 Relevant matches' : '🔍 Possible matches'
+          ]
+        },
+        {
+          tag: 'ul',
+          children: items.map(item => ({
+            tag: 'li',
+            children: [
+              '• ',
+              {
+                tag: 'a',
+                attrs: { href: item.shortenedLink!, target: '_blank' },
+                children: [item.label],
+              },
+              ` (${item.title})`,
+              score < 1 && score >= 0.6 ? ` [~${Math.round(score * 100)}% match]` : ''
+            ],
+          })),
+        },
+      ],
+    })),
+    {
+      tag: 'hr'
+    },
+    {
+      tag: 'h4',
+      children: ['ℹ️ Resources & Instructions']
+    },
     ...defaultInstructions,
     {
       tag: 'p',
@@ -206,55 +315,61 @@ async function createTelegraphPageForMatches(query: string, matchGroups: { label
     },
   ];
 
-  const res = await fetch('https://api.telegra.ph/createPage', {
-    method: 'POST',
-    body: new URLSearchParams({
-      access_token: accessToken!,
-      title: `Study Material: ${query.substring(0, 50)}${query.length > 50 ? '...' : ''}`,
-      author_name: 'Study Bot',
-      content: JSON.stringify(content),
-      return_content: 'true',
-    }),
-  });
+  try {
+    const res = await fetch('https://api.telegra.ph/createPage', {
+      method: 'POST',
+      body: new URLSearchParams({
+        access_token: accessToken!,
+        title: `Study Material: ${query.substring(0, 50)}${query.length > 50 ? '...' : ''}`,
+        author_name: 'Study Bot',
+        content: JSON.stringify(content),
+        return_content: 'true',
+      }),
+    });
 
-  const data = await res.json();
-  if (data.ok) return `https://telegra.ph/${data.result.path}`;
-  throw new Error(data.error || 'Page creation failed');
+    const data = await res.json();
+    if (data.ok) return `https://telegra.ph/${data.result.path}`;
+    throw new Error(data.error || 'Page creation failed');
+  } catch (error) {
+    console.error('Failed to create Telegraph page:', error);
+    throw error;
+  }
 }
 
-// -------------------- Bot Handler --------------------
-
+// -------------------- Bot Command Handler --------------------
 initializeMaterialData().catch(console.error);
 
 export function studySearch() {
   return async (ctx: Context) => {
     try {
       if (!ctx.message || !('text' in ctx.message)) return;
+
       const query = ctx.message.text.trim();
       if (!query) {
         await ctx.reply('❌ Please enter a search term.', {
-          reply_to_message_id: ctx.message.message_id,
+          reply_to_message_id: ctx.message.message_id
         });
         return;
       }
 
-      const mention = ctx.chat?.type?.includes('group') && ctx.from?.username
-        ? `@${ctx.from.username}`
+      const mention = ctx.chat?.type?.includes('group') && ctx.from?.username 
+        ? `@${ctx.from.username}` 
         : ctx.from?.first_name || '';
 
-      const matchGroups = matchMaterialRanked(query);
-      if (matchGroups.length === 0) {
-        await ctx.reply(`❌ ${mention}, no materials found for "${query}".`, {
-          reply_to_message_id: ctx.message.message_id,
-        });
+      const matches = matchMaterial(query);
+      if (matches.length === 0) {
+        await ctx.reply(
+          `❌ ${mention}, no materials found for "${query}".`,
+          { reply_to_message_id: ctx.message.message_id }
+        );
         return;
       }
 
-      const url = await createTelegraphPageForMatches(query, matchGroups);
+      const url = await createTelegraphPageForMatches(query, matches);
       const shortQuery = query.split(/\s+/).slice(0, 3).join(' ');
-
+      
       await ctx.reply(
-        `🔍 ${mention}, found *${matchGroups.reduce((a, g) => a + g.items.length, 0)}* results for *${shortQuery}*:\n[View materials](${url})`,
+        `🔍 ${mention}, found *${matches.length}* matches for *${shortQuery}*:\n[View materials](${url})`,
         {
           parse_mode: 'Markdown',
           disable_web_page_preview: true,
@@ -265,9 +380,11 @@ export function studySearch() {
       console.error('Study search error:', error);
       try {
         await ctx.reply('❌ Something went wrong. Please try again later.', {
-          reply_to_message_id: ctx.message?.message_id,
+          reply_to_message_id: ctx.message?.message_id
         });
-      } catch {}
+      } catch (e) {
+        console.error('Failed to send error message:', e);
+      }
     }
   };
 }
