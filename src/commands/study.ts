@@ -70,27 +70,22 @@ async function getShortenedLink(item: MaterialItem): Promise<string> {
 }
 
 function rankedMatches(query: string): MaterialItem[] {
+  const queryWords = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+
   const results: { item: MaterialItem; rank: number }[] = [];
-  const q = query.toLowerCase().trim();
 
   for (const item of materialData) {
     const fullText = `${item.title} ${item.label}`.toLowerCase();
-    if (fullText === q) {
-      results.push({ item, rank: 100 });
-    } else if (fullText.includes(q)) {
-      results.push({ item, rank: 90 });
-    } else {
-      const sim = similarity(fullText, q);
-      const pct = Math.round(sim * 100);
-      if (pct >= 70) {
-        results.push({ item, rank: pct });
-      }
+    const fullWords = new Set(fullText.split(/\s+/));
+    const matchedWords = queryWords.filter(word => fullWords.has(word));
+    const rank = Math.round((matchedWords.length / queryWords.length) * 100);
+    if (rank > 0) {
+      results.push({ item, rank });
     }
   }
 
   return results.sort((a, b) => b.rank - a.rank).map(r => r.item);
 }
-
 // Telegraph instructions
 const defaultInstructions = [
   {
