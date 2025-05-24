@@ -1,6 +1,4 @@
-// src/commands/translate.ts
 import { Context } from 'telegraf';
-import fetch from 'node-fetch'; // ensure this is installed: npm i node-fetch
 
 export async function translateCommand(ctx: Context) {
   const messageText = ctx.message?.text?.split(' ').slice(1).join(' ')?.trim();
@@ -12,6 +10,9 @@ export async function translateCommand(ctx: Context) {
   }
 
   try {
+    // Dynamic import for node-fetch (ESM compatibility)
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+
     const res = await fetch("https://libretranslate.com/translate", {
       method: "POST",
       body: JSON.stringify({
