@@ -26,7 +26,6 @@ async function shortenLink(link: string, alias: string): Promise<string> {
     const url = `https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`;
     const res = await fetch(url);
     const data = await res.json();
-
     if (data.status === 'success') {
       linkCache.set(alias, data.shortenedUrl);
       return data.shortenedUrl;
@@ -38,17 +37,19 @@ async function shortenLink(link: string, alias: string): Promise<string> {
   }
 }
 
-function calculateSimilarity(a: string, b: string): number {
-  const normalize = (text: string) => new Set(text.toLowerCase().split(/\s+/));
-  const setA = normalize(a), setB = normalize(b);
-  const intersection = [...setA].filter(x => setB.has(x));
-  return intersection.length / Math.max(setA.size, setB.size);
+function similarity(a: string, b: string): number {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+  const wordsA = new Set(a.split(/\s+/));
+  const wordsB = new Set(b.split(/\s+/));
+  const common = [...wordsA].filter(w => wordsB.has(w)).length;
+  return common / Math.max(wordsA.size, wordsB.size);
 }
 
 let materialData: MaterialItem[] = [];
-
 async function initializeMaterialData(): Promise<void> {
   const output: MaterialItem[] = [];
+
   for (const cat of material) {
     for (const item of cat.items) {
       const tgLink = createTelegramLink(item.key);
@@ -61,6 +62,7 @@ async function initializeMaterialData(): Promise<void> {
       });
     }
   }
+
   materialData = output;
 }
 
@@ -71,32 +73,33 @@ async function getShortenedLink(item: MaterialItem): Promise<string> {
   return shortLink;
 }
 
-interface ScoredItem {
-  item: MaterialItem;
-  score: number;
-}
-
-function layeredMatchMaterial(query: string): Record<string, ScoredItem[]> {
-  const results: Record<string, ScoredItem[]> = {
-    '100% Match': [],
-    '90%+ Match': [],
-    '80%+ Match': [],
-    '70%+ Match': [],
+// Enhanced matching by score buckets
+function matchMaterialRanked(query: string): { label: string; items: MaterialItem[] }[] {
+  const results: Record<string, MaterialItem[]> = {
+    'Exact Match': [],
+    'Very Close Match': [],
+    'Good Match': [],
+    'Partial Match': [],
   };
 
+  const queryLower = query.toLowerCase();
+
   for (const item of materialData) {
-    const text = `${item.title} ${item.label}`.toLowerCase();
-    const score = calculateSimilarity(text, query.toLowerCase());
+    const fullText = `${item.title} ${item.label}`.toLowerCase();
 
-    const scored = { item, score };
-
-    if (score === 1) results['100% Match'].push(scored);
-    else if (score >= 0.9) results['90%+ Match'].push(scored);
-    else if (score >= 0.8) results['80%+ Match'].push(scored);
-    else if (score >= 0.7) results['70%+ Match'].push(scored);
+    if (fullText === queryLower) {
+      results['Exact Match'].push(item);
+    } else {
+      const score = similarity(queryLower, fullText);
+      if (score >= 0.9) results['Very Close Match'].push(item);
+      else if (score >= 0.75) results['Good Match'].push(item);
+      else if (score >= 0.5) results['Partial Match'].push(item);
+    }
   }
 
-  return results;
+  return Object.entries(results)
+    .filter(([, items]) => items.length > 0)
+    .map(([label, items]) => ({ label, items }));
 }
 
 const defaultInstructions = [
@@ -110,6 +113,10 @@ const defaultInstructions = [
         children: ['YouTube Guide'],
       },
     ],
+  },
+  {
+    tag: 'p',
+    children: ['📚 Join more recommended bots:'],
   },
   {
     tag: 'ul',
@@ -155,38 +162,40 @@ async function createTelegraphAccount() {
     }),
   });
   const data = await res.json();
-  if (data.ok) accessToken = data.result.access_token;
-  else throw new Error(data.error || 'Telegraph account creation failed');
+  if (data.ok) {
+    accessToken = data.result.access_token;
+  } else {
+    throw new Error(data.error || 'Telegraph account creation failed');
+  }
 }
 
-async function createTelegraphPageForMatches(query: string, grouped: Record<string, ScoredItem[]>): Promise<string> {
+async function createTelegraphPageForMatches(query: string, matchGroups: { label: string; items: MaterialItem[] }[]): Promise<string> {
   if (!accessToken) await createTelegraphAccount();
 
+  const allItems = matchGroups.flatMap(g => g.items);
+  const shortenedLinks = await Promise.all(allItems.map(getShortenedLink));
+
+  let linkIndex = 0;
   const content = [
     { tag: 'h3', children: [`Results for: "${query}"`] },
-  ];
-
-  for (const group of ['100% Match', '90%+ Match', '80%+ Match', '70%+ Match']) {
-    const list = grouped[group];
-    if (list.length === 0) continue;
-
-    content.push({ tag: 'h4', children: [group] });
-
-    const links = await Promise.all(list.map(({ item }) => getShortenedLink(item)));
-
-    content.push({
-      tag: 'ul',
-      children: list.map(({ item }, i) => ({
-        tag: 'li',
-        children: [
-          { tag: 'a', attrs: { href: links[i] }, children: [item.label] },
-          ` (${item.title})`,
-        ],
-      })),
-    });
-  }
-
-  content.push(
+    ...matchGroups.flatMap(group => [
+      { tag: 'h4', children: [group.label] },
+      {
+        tag: 'ul',
+        children: group.items.map(item => ({
+          tag: 'li',
+          children: [
+            '• ',
+            {
+              tag: 'a',
+              attrs: { href: shortenedLinks[linkIndex++], target: '_blank' },
+              children: [item.label],
+            },
+            ` (${item.title})`,
+          ],
+        })),
+      },
+    ]),
     { tag: 'hr' },
     { tag: 'h4', children: ['ℹ️ Resources & Instructions'] },
     ...defaultInstructions,
@@ -194,14 +203,14 @@ async function createTelegraphPageForMatches(query: string, grouped: Record<stri
       tag: 'p',
       attrs: { style: 'color: gray; font-size: 0.8em' },
       children: ['Generated by Study Bot'],
-    }
-  );
+    },
+  ];
 
   const res = await fetch('https://api.telegra.ph/createPage', {
     method: 'POST',
     body: new URLSearchParams({
       access_token: accessToken!,
-      title: `Study Material: ${query.slice(0, 50)}${query.length > 50 ? '...' : ''}`,
+      title: `Study Material: ${query.substring(0, 50)}${query.length > 50 ? '...' : ''}`,
       author_name: 'Study Bot',
       content: JSON.stringify(content),
       return_content: 'true',
@@ -213,17 +222,18 @@ async function createTelegraphPageForMatches(query: string, grouped: Record<stri
   throw new Error(data.error || 'Page creation failed');
 }
 
+// -------------------- Bot Handler --------------------
+
 initializeMaterialData().catch(console.error);
 
 export function studySearch() {
   return async (ctx: Context) => {
     try {
       if (!ctx.message || !('text' in ctx.message)) return;
-
       const query = ctx.message.text.trim();
       if (!query) {
         await ctx.reply('❌ Please enter a search term.', {
-          reply_to_message_id: ctx.message.message_id
+          reply_to_message_id: ctx.message.message_id,
         });
         return;
       }
@@ -232,34 +242,32 @@ export function studySearch() {
         ? `@${ctx.from.username}`
         : ctx.from?.first_name || '';
 
-      const grouped = layeredMatchMaterial(query);
-      const totalMatches = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
-
-      if (totalMatches === 0) {
+      const matchGroups = matchMaterialRanked(query);
+      if (matchGroups.length === 0) {
         await ctx.reply(`❌ ${mention}, no materials found for "${query}".`, {
-          reply_to_message_id: ctx.message.message_id
+          reply_to_message_id: ctx.message.message_id,
         });
         return;
       }
 
-      const url = await createTelegraphPageForMatches(query, grouped);
+      const url = await createTelegraphPageForMatches(query, matchGroups);
+      const shortQuery = query.split(/\s+/).slice(0, 3).join(' ');
+
       await ctx.reply(
-        `🔍 ${mention}, found *${totalMatches}* relevant materials:\n[View materials](${url})`,
+        `🔍 ${mention}, found *${matchGroups.reduce((a, g) => a + g.items.length, 0)}* results for *${shortQuery}*:\n[View materials](${url})`,
         {
           parse_mode: 'Markdown',
           disable_web_page_preview: true,
-          reply_to_message_id: ctx.message.message_id
+          reply_to_message_id: ctx.message.message_id,
         }
       );
     } catch (error) {
       console.error('Study search error:', error);
       try {
         await ctx.reply('❌ Something went wrong. Please try again later.', {
-          reply_to_message_id: ctx.message?.message_id
+          reply_to_message_id: ctx.message?.message_id,
         });
-      } catch (e) {
-        console.error('Failed to send error message:', e);
-      }
+      } catch {}
     }
   };
 }
