@@ -5,12 +5,13 @@ import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
-import { cashStudySearch, setupBuyCommands } from './commands/cashstudy';
+
+
 import { about } from './commands/about';
 import { greeting, checkMembership } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
-
+import { studySearch } from './commands/study';
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
@@ -36,9 +37,6 @@ bot.use(async (ctx, next) => {
 });
 
 // --- Commands ---
-bot.command('search', cashStudySearch());
-
-setupBuyCommands(bot); 
 
 bot.command('add', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
@@ -251,17 +249,7 @@ bot.action('refresh_users', async (ctx) => {
 
 // --- Vercel Export ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
-  export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
-  if (req.method === 'POST') {
-    try {
-      await bot.handleUpdate(req.body);
-    } catch (err) {
-      console.error('Bot handler error:', err);
-    }
-    res.status(200).end(); // always end response once
-  } else {
-    res.status(200).send('Bot is running!');
-  }
+  await production(req, res, bot);
 };
 
 if (ENVIRONMENT !== 'production') {
