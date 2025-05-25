@@ -251,7 +251,17 @@ bot.action('refresh_users', async (ctx) => {
 
 // --- Vercel Export ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
-  await production(req, res, bot);
+  export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
+  if (req.method === 'POST') {
+    try {
+      await bot.handleUpdate(req.body);
+    } catch (err) {
+      console.error('Bot handler error:', err);
+    }
+    res.status(200).end(); // always end response once
+  } else {
+    res.status(200).send('Bot is running!');
+  }
 };
 
 if (ENVIRONMENT !== 'production') {
