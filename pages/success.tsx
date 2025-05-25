@@ -1,32 +1,17 @@
-// pages/success.tsx
-import { useRouter } from 'next/router';
 import { useEffect } from 'react';
+import { useRouter } from 'next/router';
 
-export default function Success() {
+export default function SuccessPage() {
   const router = useRouter();
   const { order_id, product_id } = router.query;
 
   useEffect(() => {
-    // Verify payment status with Cashfree API
-    async function verifyPayment() {
-      try {
-        const response = await fetch('/api/verifyPayment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: order_id, productId: product_id }),
-        });
-        const data = await response.json();
-        if (data.success) {
-          alert('Payment verified! You can now access the material.');
-        } else {
-          alert('Payment verification failed.');
-        }
-      } catch (error) {
-        console.error('Verification failed:', error);
-      }
+    if (order_id && product_id) {
+      // Redirect to Telegram bot or show a message
+      // For example: Redirect to Telegram bot with product info
+      window.location.href = `https://t.me/your_bot_username?start=order_${order_id}_${product_id}`;
     }
-    if (order_id && product_id) verifyPayment();
   }, [order_id, product_id]);
 
-  return <div>Processing payment...</div>;
+  return <div>Redirecting you to Telegram... If not redirected, click <a href={`https://t.me/your_bot_username?start=order_${order_id}_${product_id}`}>here</a>.</div>;
 }
