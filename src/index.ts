@@ -5,7 +5,7 @@ import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
-import { cashStudySearch, setContact } from './commands/cashstudy';
+import { cashStudySearch } from './commands/cashstudy';
 import { about } from './commands/about';
 import { greeting, checkMembership } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
@@ -37,7 +37,6 @@ bot.use(async (ctx, next) => {
 
 // --- Commands ---
 bot.command('search', cashStudySearch());
-bot.command('setcontact', setContact());
 
 bot.command('add', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
