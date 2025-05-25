@@ -1,23 +1,29 @@
 import { Context } from 'telegraf';
-import { Cashfree } from 'cashfree-pg'; // Cashfree SDK
-import material from '../../data/material.json'; 
+import { Cashfree } from 'cashfree-pg';
+import material from '../../data/material.json';
 import { saveToFirebase } from '../utils/saveToFirebase';
 import { db } from '../utils/firebase';
 import { get, ref, set } from 'firebase/database';
 
 // Initialize Cashfree SDK
+if (!process.env.CASHFREE_CLIENT_ID || !process.env.CASHFREE_CLIENT_SECRET) {
+  throw new Error('Cashfree client ID or secret is missing');
+}
 Cashfree.XEnvironment = process.env.CASHFREE_ENV === 'production' ? Cashfree.Environment.PRODUCTION : Cashfree.Environment.SANDBOX;
 const cashfree = new Cashfree({
-  clientId: process.env.CASHFREE_CLIENT_ID!,
-  clientSecret: process.env.CASHFREE_CLIENT_SECRET!,
+  clientId: process.env.CASHFREE_CLIENT_ID,
+  clientSecret: process.env.CASHFREE_CLIENT_SECRET,
 });
+
+// Bot instance for webhook notifications (assuming Telegraf bot is initialized elsewhere)
+import { bot } from './bot'; // Adjust path to your Telegraf bot instance
 
 interface MaterialItem {
   title: string;
   label: string;
   key: string;
   telegramLink: string;
-  productId: string; // Unique ID for payment
+  productId: string;
 }
 
 interface UserData {
@@ -30,45 +36,70 @@ interface UserData {
 }
 
 let materialData: MaterialItem[] = [];
+let isMaterialDataInitialized = false;
 
 // Initialize material data with Telegram links
 async function initializeMaterialData(): Promise<void> {
-  const output: MaterialItem[] = [];
-  for (const cat of material) {
-    for (const item of cat.items) {
-      const tgLink = `https://t.me/Material_eduhubkmrbot?start=${item.key}`;
-      output.push({
-        title: cat.title,
-        label: item.label,
-        key: item.key,
-        telegramLink: tgLink,
-        productId: `prod_${item.key}_${Date.now()}`, // Unique product ID
-      });
+  try {
+    const output: MaterialItem[] = [];
+    for (const cat of material) {
+      for (const item of cat.items) {
+        const tgLink = `https://t.me/Material_eduhubkmrbot?start=${item.key}`;
+        output.push({
+          title: cat.title,
+          label: item.label,
+          key: item.key,
+          telegramLink: tgLink,
+          productId: `prod_${item.key}_${Date.now()}`,
+        });
+      }
     }
+    materialData = output;
+    isMaterialDataInitialized = true;
+  } catch (error) {
+    console.error('Failed to initialize material data:', error);
+    throw error;
   }
-  materialData = output;
 }
-initializeMaterialData().catch(console.error);
+
+// Ensure material data is initialized before starting the bot
+initializeMaterialData().catch((err) => {
+  console.error('Initialization failed:', err);
+  process.exit(1); // Exit if initialization fails
+});
 
 // Check if user has paid for a specific product
 async function checkPaymentStatus(userId: string, productId: string): Promise<boolean> {
-  const userRef = ref(db, `users/${userId}`);
-  const snapshot = await get(userRef);
-  if (snapshot.exists()) {
-    const userData = snapshot.val() as UserData;
-    return userData.paymentStatus?.[productId] === true;
+  try {
+    const userRef = ref(db, `users/${userId}`);
+    const snapshot = await get(userRef);
+    if (snapshot.exists()) {
+      const userData = snapshot.val() as UserData;
+      return userData.paymentStatus?.[productId] === true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`Error checking payment status for user ${userId}:`, error);
+    return false;
   }
-  return false;
 }
 
 // Save payment status to Firebase
 async function savePaymentStatus(userId: string, productId: string): Promise<void> {
-  const userRef = ref(db, `users/${userId}/paymentStatus`);
-  await set(ref(db, `users/${userId}/paymentStatus/${productId}`), true);
+  try {
+    const userRef = ref(db, `users/${userId}/paymentStatus/${productId}`);
+    await set(userRef, true);
+  } catch (error) {
+    console.error(`Error saving payment status for user ${userId}, product ${productId}:`, error);
+    throw error;
+  }
 }
 
 // Search for materials and rank them
 function rankedMatches(query: string): MaterialItem[] {
+  if (!isMaterialDataInitialized) {
+    throw new Error('Material data not initialized');
+  }
   const queryWords = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const results: { item: MaterialItem; rank: number }[] = [];
 
@@ -85,9 +116,12 @@ function rankedMatches(query: string): MaterialItem[] {
   return results.sort((a, b) => b.rank - a.rank).map((r) => r.item);
 }
 
-// Create a Telegraph page with results (for unpaid users)
+// Create a Telegraph page with results
 async function createTelegraphPageForMatches(query: string, matches: MaterialItem[], userId: string): Promise<string> {
-  const accessToken = process.env.TELEGRAPH_ACCESS_TOKEN || (await createTelegraphAccount());
+  if (!process.env.TELEGRAPH_ACCESS_TOKEN) {
+    throw new Error('Telegraph access token is missing');
+  }
+  const accessToken = process.env.TELEGRAPH_ACCESS_TOKEN;
   const content = [
     { tag: 'h3', children: [`Results for: "${query}"`] },
     { tag: 'p', children: [`Found ${matches.length} study materials:`] },
@@ -96,7 +130,9 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
       children: await Promise.all(
         matches.map(async (item) => {
           const isPaid = await checkPaymentStatus(userId, item.productId);
-          const link = isPaid ? item.telegramLink : `${process.env.NEXT_PUBLIC_BASE_URL}/pay?productId=${item.productId}&userId=${userId}`;
+          const link = isPaid
+            ? item.telegramLink
+            : `${process.env.NEXT_PUBLIC_BASE_URL}/pay?productId=${item.productId}&userId=${userId}`;
           return {
             tag: 'li',
             children: [
@@ -114,31 +150,25 @@ async function createTelegraphPageForMatches(query: string, matches: MaterialIte
     { tag: 'p', attrs: { style: 'color: gray; font-size: 0.8em' }, children: ['Generated by Study Bot'] },
   ];
 
-  const res = await fetch('https://api.telegra.ph/createPage', {
-    method: 'POST',
-    body: new URLSearchParams({
-      access_token: accessToken,
-      title: `Study Material: ${query.slice(0, 50)}`,
-      author_name: 'Study Bot',
-      content: JSON.stringify(content),
-      return_content: 'true',
-    }),
-  });
+  try {
+    const res = await fetch('https://api.telegra.ph/createPage', {
+      method: 'POST',
+      body: new URLSearchParams({
+        access_token: accessToken,
+        title: `Study Material: ${query.slice(0, 50)}`,
+        author_name: 'Study Bot',
+        content: JSON.stringify(content),
+        return_content: 'true',
+      }),
+    });
 
-  const data = await res.json();
-  if (data.ok) return `https://telegra.ph/${data.result.path}`;
-  throw new Error(data.error);
-}
-
-// Telegraph account creation
-async function createTelegraphAccount(): Promise<string> {
-  const res = await fetch('https://api.telegra.ph/createAccount', {
-    method: 'POST',
-    body: new URLSearchParams({ short_name: 'studybot', author_name: 'Study Bot' }),
-  });
-  const data = await res.json();
-  if (data.ok) return data.result.access_token;
-  throw new Error(data.error);
+    const data = await res.json();
+    if (data.ok) return `https://telegra.ph/${data.result.path}`;
+    throw new Error(data.error || 'Failed to create Telegraph page');
+  } catch (error) {
+    console.error('Error creating Telegraph page:', error);
+    throw error;
+  }
 }
 
 // Default Telegraph instructions
@@ -197,16 +227,28 @@ const defaultInstructions = [
 export function cashStudySearch() {
   return async (ctx: Context) => {
     try {
-      if (!ctx.message || !('text' in ctx.message)) return;
+      // Restrict to private chats
+      if (ctx.chat?.type !== 'private') {
+        await ctx.reply('❌ This command is only available in private chats.', {
+          reply_to_message_id: ctx.message?.message_id,
+        });
+        return;
+      }
+
+      if (!ctx.message || !('text' in ctx.message)) {
+        await ctx.reply('❌ No search query provided.', { reply_to_message_id: ctx.message?.message_id });
+        return;
+      }
+
       const query = ctx.message.text.trim();
       if (!query) {
         await ctx.reply('❌ Please enter a search term.', { reply_to_message_id: ctx.message.message_id });
         return;
       }
 
-      // Extract user details from Telegram
+      // Extract user details
       const user = ctx.from;
-      if (!user) {
+      if (!user || !user.id) {
         await ctx.reply('❌ Unable to fetch user details.', { reply_to_message_id: ctx.message.message_id });
         return;
       }
@@ -221,7 +263,7 @@ export function cashStudySearch() {
       // Save user to Firebase
       await saveToFirebase(user);
 
-      // Check if user has provided phone and email (prompt if missing)
+      // Check if user has provided phone and email
       const userRef = ref(db, `users/${userId}`);
       const snapshot = await get(userRef);
       let userDetails = snapshot.exists() ? snapshot.val() : userData;
@@ -237,20 +279,18 @@ export function cashStudySearch() {
       // Search for materials
       const matches = rankedMatches(query);
       if (matches.length === 0) {
-        const mention = ctx.chat?.type?.includes('group') && user.username ? `@${user.username}` : user.first_name || '';
-        await ctx.reply(`❌ ${mention}, no materials found for "${query}".`, {
+        await ctx.reply(`❌ ${user.first_name || ''}, no materials found for "${query}".`, {
           reply_to_message_id: ctx.message.message_id,
         });
         return;
       }
 
-      // Create Telegraph page with conditional links (direct for paid, payment link for unpaid)
+      // Create Telegraph page
       const telegraphURL = await createTelegraphPageForMatches(query, matches, userId);
       const shortQuery = query.split(/\s+/).slice(0, 3).join(' ');
-      const mention = ctx.chat?.type?.includes('group') && user.username ? `@${user.username}` : user.first_name || '';
 
       await ctx.reply(
-        `🔍 ${mention}, found *${matches.length}* matches for *${shortQuery}*:\n[View materials](${telegraphURL})`,
+        `🔍 ${user.first_name || ''}, found *${matches.length}* matches for *${shortQuery}*:\n[View materials](${telegraphURL})`,
         {
           parse_mode: 'Markdown',
           disable_web_page_preview: true,
@@ -258,7 +298,7 @@ export function cashStudySearch() {
         }
       );
     } catch (err) {
-      console.error(err);
+      console.error('Error in cashStudySearch:', err);
       await ctx.reply('❌ Something went wrong. Please try again later.', {
         reply_to_message_id: ctx.message?.message_id,
       });
@@ -270,7 +310,18 @@ export function cashStudySearch() {
 export function setContact() {
   return async (ctx: Context) => {
     try {
-      if (!ctx.message || !('text' in ctx.message)) return;
+      if (ctx.chat?.type !== 'private') {
+        await ctx.reply('❌ This command is only available in private chats.', {
+          reply_to_message_id: ctx.message?.message_id,
+        });
+        return;
+      }
+
+      if (!ctx.message || !('text' in ctx.message)) {
+        await ctx.reply('❌ No contact details provided.', { reply_to_message_id: ctx.message.message_id });
+        return;
+      }
+
       const args = ctx.message.text.split(' ').slice(1);
       if (args.length < 2) {
         await ctx.reply('❌ Usage: /setcontact <phone> <email>', { reply_to_message_id: ctx.message.message_id });
@@ -284,7 +335,7 @@ export function setContact() {
         return;
       }
 
-      // Validate phone and email (basic validation)
+      // Validate phone and email
       const phoneRegex = /^\+?[1-9]\d{1,14}$/;
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!phoneRegex.test(phone) || !emailRegex.test(email)) {
@@ -302,7 +353,7 @@ export function setContact() {
 
       await ctx.reply('✅ Contact details saved successfully!', { reply_to_message_id: ctx.message.message_id });
     } catch (err) {
-      console.error(err);
+      console.error('Error in setContact:', err);
       await ctx.reply('❌ Failed to save contact details.', { reply_to_message_id: ctx.message.message_id });
     }
   };
@@ -320,23 +371,35 @@ export async function handleWebhook(req: any, res: any) {
     const paymentStatus = webhookData.payment_status;
 
     if (paymentStatus === 'SUCCESS') {
-      // Fetch order details to get userId and productId
-      const order = await Cashfree.PGOrderFetch({
-        orderId,
-      });
+      // Fetch order details
+      const order = await cashfree.PGOrderFetch({ orderId });
+      if (!order?.customer_details?.customer_id || !order?.order_meta?.product_id) {
+        throw new Error('Missing customer_id or product_id in order details');
+      }
 
-      const userId = order.customer_details.customer_id; // Assuming userId was set as customer_id
-      const productId = order.order_meta.product_id; // Assuming productId was stored in order_meta
+      const userId = order.customer_details.customer_id;
+      const productId = order.order_meta.product_id;
 
       // Update payment status in Firebase
       await savePaymentStatus(userId, productId);
 
-      // Notify user via Telegram (if bot is integrated with Telegram)
-      // This requires a Telegram bot instance to send messages
-      // Example: bot.telegram.sendMessage(userId, `✅ Payment successful for ${productId}! You can now access the material.`);
+      // Find the material item to get the Telegram link
+      const materialItem = materialData.find((item) => item.productId === productId);
+      if (!materialItem) {
+        throw new Error(`Material item not found for productId: ${productId}`);
+      }
+
+      // Notify user via Telegram
+      await bot.telegram.sendMessage(
+        userId,
+        `✅ Payment successful for "${materialItem.label}"! Access it here: ${materialItem.telegramLink}`,
+        { parse_mode: 'Markdown' }
+      );
+
+      return res.status(200).json({ success: true });
     }
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: false, message: 'Payment not successful' });
   } catch (error) {
     console.error('Webhook processing failed:', error);
     return res.status(500).json({ success: false, error: 'Webhook processing failed' });
