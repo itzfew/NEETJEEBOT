@@ -12,7 +12,7 @@ interface MaterialItem {
 
 const linkCache = new Map<string, string>();
 let accessToken: string | null = null;
-const ADRINO_API_KEY = '5a2539904639474b5f3da41f528199204eb76f65';
+const ADRINO_API_KEY = 'a78014e734de0fe2228c033594e6b3f891e8ce46';
 
 function createTelegramLink(key: string): string {
   return `https://t.me/Material_eduhubkmrbot?start=${key}`;
@@ -22,7 +22,7 @@ async function shortenLink(link: string, alias: string): Promise<string> {
   if (linkCache.has(alias)) return linkCache.get(alias)!;
   try {
     if (alias.length > 30) alias = alias.substring(0, 30);
-    const res = await fetch(`https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`);
+    const res = await fetch(`https://arolinks.com/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`);
     const data = await res.json();
     if (data.status === 'success') {
       linkCache.set(alias, data.shortenedUrl);
