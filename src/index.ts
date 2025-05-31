@@ -8,7 +8,7 @@ import { handleTranslateCommand } from './commands/translate';
 
 
 import { about } from './commands/about';
-import { greeting, checkMembership } from './text/greeting'; // import checkMembership here
+import { greeting } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
@@ -26,15 +26,6 @@ if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
-
-// Middleware to restrict private chat commands to only members of required channel/group
-bot.use(async (ctx, next) => {
-  if (ctx.chat && isPrivateChat(ctx.chat.type)) {
-    const isAllowed = await checkMembership(ctx);
-    if (!isAllowed) return; // user not allowed, do not proceed
-  }
-  await next();
-});
 
 // --- Commands ---
 
