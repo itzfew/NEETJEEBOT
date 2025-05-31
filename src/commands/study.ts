@@ -7,31 +7,10 @@ interface MaterialItem {
   label: string;
   key: string;
   telegramLink: string;
-  shortenedLink: string | null;
 }
-
-const linkCache = new Map<string, string>();
-let accessToken: string | null = null;
-const ADRINO_API_KEY = '5a2539904639474b5f3da41f528199204eb76f65';
 
 function createTelegramLink(key: string): string {
   return `https://t.me/Material_eduhubkmrbot?start=${key}`;
-}
-
-async function shortenLink(link: string, alias: string): Promise<string> {
-  if (linkCache.has(alias)) return linkCache.get(alias)!;
-  try {
-    if (alias.length > 30) alias = alias.substring(0, 30);
-    const res = await fetch(`https://adrinolinks.in/api?api=${ADRINO_API_KEY}&url=${encodeURIComponent(link)}&alias=${alias}`);
-    const data = await res.json();
-    if (data.status === 'success') {
-      linkCache.set(alias, data.shortenedUrl);
-      return data.shortenedUrl;
-    }
-    return link;
-  } catch {
-    return link;
-  }
 }
 
 function similarity(a: string, b: string): number {
@@ -54,7 +33,6 @@ async function initializeMaterialData(): Promise<void> {
         label: item.label,
         key: item.key,
         telegramLink: tgLink,
-        shortenedLink: null,
       });
     }
   }
@@ -62,16 +40,8 @@ async function initializeMaterialData(): Promise<void> {
 }
 initializeMaterialData().catch(console.error);
 
-async function getShortenedLink(item: MaterialItem): Promise<string> {
-  if (item.shortenedLink) return item.shortenedLink;
-  const shortLink = await shortenLink(item.telegramLink, item.key);
-  item.shortenedLink = shortLink;
-  return shortLink;
-}
-
 function rankedMatches(query: string): MaterialItem[] {
   const queryWords = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-
   const results: { item: MaterialItem; rank: number }[] = [];
 
   for (const item of materialData) {
@@ -86,6 +56,7 @@ function rankedMatches(query: string): MaterialItem[] {
 
   return results.sort((a, b) => b.rank - a.rank).map(r => r.item);
 }
+
 // Telegraph instructions
 const defaultInstructions = [
   {
@@ -124,6 +95,7 @@ const defaultInstructions = [
   },
 ];
 
+let accessToken: string | null = null;
 async function createTelegraphAccount() {
   const res = await fetch('https://api.telegra.ph/createAccount', {
     method: 'POST',
@@ -136,17 +108,17 @@ async function createTelegraphAccount() {
 
 async function createTelegraphPageForMatches(query: string, matches: MaterialItem[]): Promise<string> {
   if (!accessToken) await createTelegraphAccount();
-  const links = await Promise.all(matches.map(getShortenedLink));
+
   const content = [
     { tag: 'h3', children: [`Results for: "${query}"`] },
     { tag: 'p', children: [`Found ${matches.length} study materials:`] },
     {
       tag: 'ul',
-      children: matches.map((item, i) => ({
+      children: matches.map((item) => ({
         tag: 'li',
         children: [
           '• ',
-          { tag: 'a', attrs: { href: links[i], target: '_blank' }, children: [item.label] },
+          { tag: 'a', attrs: { href: item.telegramLink, target: '_blank' }, children: [item.label] },
           ` (${item.title})`,
         ]
       }))
