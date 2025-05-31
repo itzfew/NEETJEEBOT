@@ -350,6 +350,13 @@
   ]
 },
   {
+    "tittle":"NCERT Diagrams AKASH",
+  "items":[
+{"label":"Akash Diagram-1","key":"akash-diagrams-1"},
+{"label":"Akash Diagram-2","key":"akash-diagrams-2"}
+  ]
+  },
+  {
   "title": "PW / Physics Wallah Modules",
   "items": [
     { "label": "Physical Chemistry Module", "key": "pw-module-physical-chemistry" },
