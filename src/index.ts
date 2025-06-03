@@ -4,7 +4,7 @@ import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
-import { handleOCRCommand } from './commands/ocr';
+import { handleOCRCommand, setBotInstance } from './commands/ocr';
 import { about } from './commands/about';
 import { greeting } from './text/greeting';
 import { setupBroadcast } from './commands/broadcast';
@@ -118,6 +118,7 @@ bot.command('logs', async (ctx) => {
 
 // Admin: /broadcast
 setupBroadcast(bot);
+setBotInstance(bot);
 
 // --- Main Handler: Log + Search ---
 
