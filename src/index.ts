@@ -30,11 +30,12 @@ const bot = new Telegraf(BOT_TOKEN);
 // Configure Tesseract.js for Node.js environment
 const tesseractConfig = {
   corePath: process.env.NODE_ENV === 'production'
-    ? '/var/task/node_modules/tesseract.js-core/tesseract-core.wasm' // Use non-SIMD WASM for reliability
+    ? '/var/task/node_modules/tesseract.js-core/tesseract-core.wasm'
     : path.join(__dirname, '../node_modules/tesseract.js-core/tesseract-core.wasm'),
-  workerPath: null, // Disable Web Workers for Node.js compatibility
   langPath: 'https://tessdata.projectnaptha.com/4.0.0', // Use hosted language data
   logger: (m: any) => console.log(m), // Log progress for debugging
+  workerPath: undefined, // Explicitly disable Web Workers
+  workerBlobURL: false, // Prevent Web Worker blob creation
 };
 
 // --- Commands ---
@@ -84,28 +85,17 @@ bot.command('ocr', async (ctx) => {
     const file = await ctx.telegram.getFile(fileId);
     const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
 
-    // Create a Tesseract worker in Node.js mode
-    const worker = await Tesseract.createWorker('eng', 1, {
-      ...tesseractConfig,
-      workerPath: undefined, // Explicitly disable worker for Node.js
-    });
+    // Perform OCR directly with Tesseract.recognize
+    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', tesseractConfig);
 
-    try {
-      // Perform OCR
-      const { data: { text } } = await worker.recognize(fileUrl);
-      
-      // Log the OCR command
-      await logMessage(chat.id, '/ocr', user);
+    // Log the OCR command
+    await logMessage(chat.id, '/ocr', user);
 
-      // Send the extracted text back to the user
-      if (text.trim()) {
-        await ctx.reply(`Extracted text:\n\n${text}`);
-      } else {
-        await ctx.reply('No text could be extracted from the image.');
-      }
-    } finally {
-      // Terminate the worker to free resources
-      await worker.terminate();
+    // Send the extracted text back to the user
+    if (text.trim()) {
+      await ctx.reply(`Extracted text:\n\n${text}`);
+    } else {
+      await ctx.reply('No text could be extracted from the image.');
     }
   } catch (err) {
     console.error('OCR processing failed:', err);
@@ -113,7 +103,7 @@ bot.command('ocr', async (ctx) => {
     // Forward error to admin for debugging
     await ctx.telegram.sendMessage(
       ADMIN_ID,
-      `*OCR Error*\n\n*Chat ID:* ${chat.id}\n*Error:* ${err.message}\n*Stack:* ${err.stack}`,
+      `*OCR Error*\n\n*Chat ID:* ${chat.id}\n*Error:* ${err.message}\n*Stack:* ${err.stack || 'No stack trace available'}`,
       { parse_mode: 'Markdown' }
     );
   }
