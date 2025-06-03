@@ -4,20 +4,9 @@
     {
       "src": "src/index.ts",
       "use": "@vercel/node"
-    },
-    {
-      "src": "node_modules/tesseract.js-core/*.wasm",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
-    {
-      "src": "/node_modules/tesseract.js-core/(.*)",
-      "dest": "/node_modules/tesseract.js-core/$1",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000"
-      }
-    },
     {
       "src": "/(.*)",
       "dest": "src/index.ts"
