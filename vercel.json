@@ -12,12 +12,6 @@
       "dest": "src/index.ts"
     }
   ],
-  "functions": {
-    "src/index.ts": {
-      "memory": 2048,
-      "maxDuration": 60
-    }
-  },
   "public": true,
   "cleanUrls": true,
   "trailingSlash": false
