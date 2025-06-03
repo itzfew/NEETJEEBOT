@@ -18,8 +18,10 @@ async function downloadTelegramImage(fileId: string, botToken: string): Promise<
 async function performOCR(imageBuffer: Buffer, lang: string = 'eng'): Promise<string> {
   const worker = await createWorker({
     logger: (m) => console.log('Tesseract progress:', m),
-    // Ensure WASM files are loaded from the correct path
-    corePath: '/node_modules/tesseract.js-core/',
+    // Use CDN for WASM files to ensure availability in Vercel
+    corePath: 'https://unpkg.com/tesseract.js-core@5.1.0/',
+    workerPath: 'https://unpkg.com/tesseract.js@5.1.0/dist/worker.min.js',
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0',
   });
 
   try {
