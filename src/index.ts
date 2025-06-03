@@ -18,7 +18,7 @@ config();
 const isPrivateChat = (type?: string) => type === 'private';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
-const ENVIRONMENT = process.env.NODE_ENV || '';
+const ENVIRONMENT = process.env.NODE_ENV || 'development';
 const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
 
@@ -134,26 +134,26 @@ bot.on('message', async (ctx) => {
   if (isPrivateChat(chat.type)) {
     let logText = '[Unknown/Unsupported message type]';
 
-    if (message.text) {
+    if ('text' in message) {
       logText = message.text;
-    } else if (message.photo) {
+    } else if ('photo' in message) {
       logText = '[Photo message]';
-    } else if (message.document) {
+    } else if ('document' in message) {
       logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
-    } else if (message.video) {
+    } else if ('video' in message) {
       logText = '[Video message]';
-    } else if (message.voice) {
+    } else if ('voice' in message) {
       logText = '[Voice message]';
-    } else if (message.audio) {
+    } else if ('audio' in message) {
       logText = '[Audio message]';
-    } else if (message.sticker) {
+    } else if ('sticker' in message) {
       logText = `[Sticker: ${message.sticker.emoji || 'Sticker'}]`;
-    } else if (message.contact) {
+    } else if ('contact' in message) {
       logText = '[Contact shared]';
-    } else if (message.location) {
+    } else if ('location' in message) {
       const loc = message.location;
       logText = `[Location: ${loc.latitude}, ${loc.longitude}]`;
-    } else if (message.poll) {
+    } else if ('poll' in message) {
       logText = `[Poll: ${message.poll.question}]`;
     }
 
@@ -164,7 +164,7 @@ bot.on('message', async (ctx) => {
     }
 
     // Forward non-text messages to admin
-    if (!message.text) {
+    if (!('text' in message)) {
       const name = user.first_name || 'Unknown';
       const username = user.username ? `@${user.username}` : 'N/A';
       const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -183,14 +183,14 @@ bot.on('message', async (ctx) => {
   // Study search (text + mention)
   const isPrivate = isPrivateChat(chat.type);
   const isGroup = chat.type === 'group' || chat.type === 'supergroup';
-  const mentionedEntity = message.entities?.find(
+  const mentionedEntity = 'entities' in message && message.entities?.find(
     (e) =>
       e.type === 'mention' &&
       message.text?.slice(e.offset, e.offset + e.length).toLowerCase() ===
         `@${BOT_USERNAME.toLowerCase()}`
   );
 
-  if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
+  if ('text' in message && (isPrivate || (isGroup && mentionedEntity))) {
     if (mentionedEntity) {
       ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
     }
@@ -248,11 +248,30 @@ bot.action('refresh_users', async (ctx) => {
 // --- Vercel Export ---
 export default async (req: VercelRequest, res: VercelResponse) => {
   try {
+    // Validate request method
+    if (req.method !== 'POST') {
+      console.warn(`Invalid request method: ${req.method}`);
+      return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    // Validate request body
+    if (!req.body) {
+      console.error('Request body is empty');
+      return res.status(400).json({ error: 'Empty request body' });
+    }
+
+    // Validate update_id
+    if (!('update_id' in req.body)) {
+      console.error('Invalid Telegram update: missing update_id', JSON.stringify(req.body));
+      return res.status(400).json({ error: 'Invalid Telegram update: missing update_id' });
+    }
+
+    // Process the Telegram update
     await bot.handleUpdate(req.body);
-    res.status(200).send('OK');
+    return res.status(200).json({ status: 'OK' });
   } catch (err) {
     console.error('Vercel handler error:', err);
-    res.status(500).send('Internal Server Error');
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
 
@@ -264,8 +283,14 @@ if (ENVIRONMENT !== 'production') {
   });
 
   // Handle graceful shutdown
-  process.once('SIGINT', () => bot.stop('SIGINT'));
-  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+  process.once('SIGINT', () => {
+    console.log('Received SIGINT. Stopping bot...');
+    bot.stop('SIGINT');
+  });
+  process.once('SIGTERM', () => {
+    console.log('Received SIGTERM. Stopping bot...');
+    bot.stop('SIGTERM');
+  });
 } else {
   // In production, rely on Vercel webhooks (no bot.launch)
   console.log('Bot configured for webhooks in production mode');
