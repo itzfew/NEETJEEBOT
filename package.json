@@ -31,7 +31,7 @@
   "scripts": {
     "dev": "DEBUG=bot* dotenv -e .env -- ts-node src/index.ts",
     "dev:watch": "DEBUG=bot* dotenv -e .env -- nodemon -e ts -x ts-node src/index.ts",
-    "build": "ncc build src/index.ts -o public -m",
+    "build": "ncc build src/index.ts -o public -m --external tesseract.js-core", // Updated to externalize tesseract.js-core
     "prettier": "prettier --write 'src/**/*.ts'",
     "lint": "tsc --noemit",
     "start": "node public/index.js"
