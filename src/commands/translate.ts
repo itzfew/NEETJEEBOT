@@ -11,7 +11,6 @@ export const handleTranslateCommand = async (ctx: Context) => {
     }
 
     // Parse command argument after /translate (like "ur" or empty)
-    // ctx.message.text might be "/translate ur" or just "/translate"
     const args = ctx.message.text?.split(' ').slice(1) || [];
     // Default destination language is English
     let dl = 'en';
@@ -27,14 +26,8 @@ export const handleTranslateCommand = async (ctx: Context) => {
     const { data } = await axios.get(url);
 
     const replyText = `
-*Original (${data['source-language']}):* \`${data['source-text'].trim()}\`
 *Translation (${data['destination-language']}):* \`${data['destination-text']}\`
 ${data.pronunciation?.['destination-text-audio'] ? `[Audio](${data.pronunciation['destination-text-audio']})` : ''}
-${
-  data.translations?.['possible-translations']
-    ? '\n*Possible translations:* ' + data.translations['possible-translations'].join(', ')
-    : ''
-}
 `.trim();
 
     await ctx.replyWithMarkdown(replyText, { disable_web_page_preview: true });
