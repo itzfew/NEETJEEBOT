@@ -1,6 +1,8 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import Tesseract from 'tesseract.js'; // Import Tesseract.js for OCR
+import path from 'path';
+import fs from 'fs';
 
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
@@ -26,6 +28,16 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
+// Configure Tesseract.js with explicit WASM path for Vercel
+const tesseractConfig = {
+  corePath: process.env.NODE_ENV === 'production'
+    ? '/var/task/node_modules/tesseract.js-core' // Vercel serverless path
+    : path.join(__dirname, '../node_modules/tesseract.js-core'), // Local development path
+  workerPath: path.join(__dirname, '../node_modules/tesseract.js/dist/worker.min.js'),
+  langPath: 'https://tessdata.projectnaptha.com/4.0.0', // Use hosted language data
+  logger: (m: any) => console.log(m), // Log progress for debugging
+};
+
 // --- Commands ---
 
 bot.command('add', async (ctx) => {
@@ -44,7 +56,7 @@ bot.command('about', async (ctx) => {
   await about()(ctx);
 });
 
-// New /ocr command to extract text from images
+// OCR command to extract text from images
 bot.command('ocr', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
@@ -73,10 +85,8 @@ bot.command('ocr', async (ctx) => {
     const file = await ctx.telegram.getFile(fileId);
     const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
 
-    // Perform OCR using Tesseract.js
-    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
-      logger: (m) => console.log(m), // Optional: Log progress
-    });
+    // Perform OCR using Tesseract.js with custom configuration
+    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', tesseractConfig);
 
     // Log the OCR command
     await logMessage(chat.id, '/ocr', user);
@@ -89,7 +99,13 @@ bot.command('ocr', async (ctx) => {
     }
   } catch (err) {
     console.error('OCR processing failed:', err);
-    await ctx.reply('❌ Failed to process the image for OCR.');
+    await ctx.reply('❌ Failed to process the image for OCR. Please try again or use a different image.');
+    // Forward error to admin for debugging
+    await ctx.telegram.sendMessage(
+      ADMIN_ID,
+      `*OCR Error*\n\n*Chat ID:* ${chat.id}\n*Error:* ${err.message}`,
+      { parse_mode: 'Markdown' }
+    );
   }
 });
 
