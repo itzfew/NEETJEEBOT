@@ -1,20 +1,21 @@
 {
+  "version": 2,
   "builds": [
     {
-      "src": "public/index.js",
+      "src": "src/index.ts",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "public/index.js"
+      "dest": "src/index.ts"
     }
   ],
   "functions": {
-    "public/index.js": {
-      "memory": 1024,
-      "maxDuration": 30
+    "src/index.ts": {
+      "memory": 2048,
+      "maxDuration": 60
     }
   },
   "public": true,
