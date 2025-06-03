@@ -1,8 +1,7 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import Tesseract from 'tesseract.js'; // Import Tesseract.js for OCR
+import Tesseract from 'tesseract.js';
 import path from 'path';
-import fs from 'fs';
 
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
@@ -28,12 +27,12 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Configure Tesseract.js with explicit WASM path for Vercel
+// Configure Tesseract.js for Node.js environment
 const tesseractConfig = {
   corePath: process.env.NODE_ENV === 'production'
-    ? '/var/task/node_modules/tesseract.js-core' // Vercel serverless path
-    : path.join(__dirname, '../node_modules/tesseract.js-core'), // Local development path
-  workerPath: path.join(__dirname, '../node_modules/tesseract.js/dist/worker.min.js'),
+    ? '/var/task/node_modules/tesseract.js-core/tesseract-core.wasm' // Use non-SIMD WASM for reliability
+    : path.join(__dirname, '../node_modules/tesseract.js-core/tesseract-core.wasm'),
+  workerPath: null, // Disable Web Workers for Node.js compatibility
   langPath: 'https://tessdata.projectnaptha.com/4.0.0', // Use hosted language data
   logger: (m: any) => console.log(m), // Log progress for debugging
 };
@@ -85,25 +84,36 @@ bot.command('ocr', async (ctx) => {
     const file = await ctx.telegram.getFile(fileId);
     const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
 
-    // Perform OCR using Tesseract.js with custom configuration
-    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', tesseractConfig);
+    // Create a Tesseract worker in Node.js mode
+    const worker = await Tesseract.createWorker('eng', 1, {
+      ...tesseractConfig,
+      workerPath: undefined, // Explicitly disable worker for Node.js
+    });
 
-    // Log the OCR command
-    await logMessage(chat.id, '/ocr', user);
+    try {
+      // Perform OCR
+      const { data: { text } } = await worker.recognize(fileUrl);
+      
+      // Log the OCR command
+      await logMessage(chat.id, '/ocr', user);
 
-    // Send the extracted text back to the user
-    if (text.trim()) {
-      await ctx.reply(`Extracted text:\n\n${text}`);
-    } else {
-      await ctx.reply('No text could be extracted from the image.');
+      // Send the extracted text back to the user
+      if (text.trim()) {
+        await ctx.reply(`Extracted text:\n\n${text}`);
+      } else {
+        await ctx.reply('No text could be extracted from the image.');
+      }
+    } finally {
+      // Terminate the worker to free resources
+      await worker.terminate();
     }
   } catch (err) {
     console.error('OCR processing failed:', err);
-    await ctx.reply('❌ Failed to process the image for OCR. Please try again or use a different image.');
+    await ctx.reply('❌ Failed to process the image for OCR. Please try a different image or try again later.');
     // Forward error to admin for debugging
     await ctx.telegram.sendMessage(
       ADMIN_ID,
-      `*OCR Error*\n\n*Chat ID:* ${chat.id}\n*Error:* ${err.message}`,
+      `*OCR Error*\n\n*Chat ID:* ${chat.id}\n*Error:* ${err.message}\n*Stack:* ${err.stack}`,
       { parse_mode: 'Markdown' }
     );
   }
