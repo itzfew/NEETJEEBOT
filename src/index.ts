@@ -7,7 +7,6 @@ import { handleTranslateCommand } from './commands/translate';
 import { handleOCRCommand } from './commands/ocr';
 import { about } from './commands/about';
 import { greeting } from './text/greeting';
-import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
 
@@ -256,15 +255,6 @@ export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
     res.status(500).send('Internal Server Error');
   }
 };
-
-// --- Initialize Tesseract.js WASM Path ---
-import { setWasmPath } from 'tesseract.js';
-
-// Ensure Tesseract.js WASM files are accessible
-setWasmPath({
-  'tesseract-core.wasm': '/node_modules/tesseract.js-core/tesseract-core.wasm',
-  'tesseract-core-simd.wasm': '/node_modules/tesseract.js-core/tesseract-core-simd.wasm',
-});
 
 // --- Bot Launch ---
 if (ENVIRONMENT !== 'production') {
