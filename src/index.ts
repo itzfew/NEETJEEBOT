@@ -1,16 +1,19 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
 import { handleOCRCommand } from './commands/ocr';
 import { about } from './commands/about';
-import { greeting } from './text/greeting'; // import checkMembership here
+import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
+
+// Load environment variables
+import { config } from 'dotenv';
+config();
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
@@ -20,7 +23,10 @@ const ENVIRONMENT = process.env.NODE_ENV || '';
 const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
 
-if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
+if (!BOT_TOKEN) {
+  console.error('BOT_TOKEN not provided!');
+  throw new Error('BOT_TOKEN not provided!');
+}
 
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
@@ -36,8 +42,10 @@ bot.command('add', async (ctx) => {
     },
   });
 });
+
 bot.command('translate', handleTranslateCommand);
 bot.command('ocr', handleOCRCommand);
+
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
   await about()(ctx);
@@ -240,9 +248,35 @@ bot.action('refresh_users', async (ctx) => {
 
 // --- Vercel Export ---
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
-  await production(req, res, bot);
+  try {
+    await bot.handleUpdate(req.body);
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Vercel handler error:', err);
+    res.status(500).send('Internal Server Error');
+  }
 };
 
+// --- Initialize Tesseract.js WASM Path ---
+import { setWasmPath } from 'tesseract.js';
+
+// Ensure Tesseract.js WASM files are accessible
+setWasmPath({
+  'tesseract-core.wasm': '/node_modules/tesseract.js-core/tesseract-core.wasm',
+  'tesseract-core-simd.wasm': '/node_modules/tesseract.js-core/tesseract-core-simd.wasm',
+});
+
+// --- Bot Launch ---
 if (ENVIRONMENT !== 'production') {
-  development(bot);
+  // Use polling for development
+  bot.launch({ dropPendingUpdates: true }).then(() => {
+    console.log('EduHub Bot is running locally with polling...');
+  });
+
+  // Handle graceful shutdown
+  process.once('SIGINT', () => bot.stop('SIGINT'));
+  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+} else {
+  // In production, rely on Vercel webhooks (no bot.launch)
+  console.log('Bot configured for webhooks in production mode');
 }
