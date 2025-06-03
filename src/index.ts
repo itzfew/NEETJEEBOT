@@ -1,31 +1,26 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import Tesseract from 'tesseract.js'; // Import Tesseract.js for OCR
+
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
-import { handleOCRCommand, setBotInstance } from './commands/ocr';
 import { about } from './commands/about';
 import { greeting } from './text/greeting';
+import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
-
-// Load environment variables
-import { config } from 'dotenv';
-config();
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
-const ENVIRONMENT = process.env.NODE_ENV || 'development';
+const ENVIRONMENT = process.env.NODE_ENV || '';
 const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
 
-if (!BOT_TOKEN) {
-  console.error('BOT_TOKEN not provided!');
-  throw new Error('BOT_TOKEN not provided!');
-}
+if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
@@ -43,11 +38,59 @@ bot.command('add', async (ctx) => {
 });
 
 bot.command('translate', handleTranslateCommand);
-bot.command('ocr', handleOCRCommand);
 
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
   await about()(ctx);
+});
+
+// New /ocr command to extract text from images
+bot.command('ocr', async (ctx) => {
+  const chat = ctx.chat;
+  const user = ctx.from;
+  const message = ctx.message;
+
+  if (!chat || !user || !message) return;
+
+  // Check if the message is a reply to another message
+  if (!('reply_to_message' in message) || !message.reply_to_message) {
+    return ctx.reply('Please reply to an image with /ocr to extract text.');
+  }
+
+  const repliedMessage = message.reply_to_message;
+
+  // Check if the replied message contains an image
+  if (!('photo' in repliedMessage) || !repliedMessage.photo) {
+    return ctx.reply('The replied message does not contain an image.');
+  }
+
+  try {
+    // Get the largest photo size (highest resolution)
+    const photo = repliedMessage.photo[repliedMessage.photo.length - 1];
+    const fileId = photo.file_id;
+
+    // Get the file path from Telegram
+    const file = await ctx.telegram.getFile(fileId);
+    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
+
+    // Perform OCR using Tesseract.js
+    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
+      logger: (m) => console.log(m), // Optional: Log progress
+    });
+
+    // Log the OCR command
+    await logMessage(chat.id, '/ocr', user);
+
+    // Send the extracted text back to the user
+    if (text.trim()) {
+      await ctx.reply(`Extracted text:\n\n${text}`);
+    } else {
+      await ctx.reply('No text could be extracted from the image.');
+    }
+  } catch (err) {
+    console.error('OCR processing failed:', err);
+    await ctx.reply('❌ Failed to process the image for OCR.');
+  }
 });
 
 bot.command('start', async (ctx) => {
@@ -118,7 +161,6 @@ bot.command('logs', async (ctx) => {
 
 // Admin: /broadcast
 setupBroadcast(bot);
-setBotInstance(bot);
 
 // --- Main Handler: Log + Search ---
 
@@ -135,26 +177,26 @@ bot.on('message', async (ctx) => {
   if (isPrivateChat(chat.type)) {
     let logText = '[Unknown/Unsupported message type]';
 
-    if ('text' in message) {
+    if (message.text) {
       logText = message.text;
-    } else if ('photo' in message) {
+    } else if (message.photo) {
       logText = '[Photo message]';
-    } else if ('document' in message) {
+    } else if (message.document) {
       logText = `[Document: ${message.document.file_name || 'Unnamed'}]`;
-    } else if ('video' in message) {
+    } else if (message.video) {
       logText = '[Video message]';
-    } else if ('voice' in message) {
+    } else if (message.voice) {
       logText = '[Voice message]';
-    } else if ('audio' in message) {
+    } else if (message.audio) {
       logText = '[Audio message]';
-    } else if ('sticker' in message) {
+    } else if (message.sticker) {
       logText = `[Sticker: ${message.sticker.emoji || 'Sticker'}]`;
-    } else if ('contact' in message) {
+    } else if (message.contact) {
       logText = '[Contact shared]';
-    } else if ('location' in message) {
+    } else if (message.location) {
       const loc = message.location;
       logText = `[Location: ${loc.latitude}, ${loc.longitude}]`;
-    } else if ('poll' in message) {
+    } else if (message.poll) {
       logText = `[Poll: ${message.poll.question}]`;
     }
 
@@ -165,7 +207,7 @@ bot.on('message', async (ctx) => {
     }
 
     // Forward non-text messages to admin
-    if (!('text' in message)) {
+    if (!message.text) {
       const name = user.first_name || 'Unknown';
       const username = user.username ? `@${user.username}` : 'N/A';
       const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -184,14 +226,14 @@ bot.on('message', async (ctx) => {
   // Study search (text + mention)
   const isPrivate = isPrivateChat(chat.type);
   const isGroup = chat.type === 'group' || chat.type === 'supergroup';
-  const mentionedEntity = 'entities' in message && message.entities?.find(
+  const mentionedEntity = message.entities?.find(
     (e) =>
       e.type === 'mention' &&
       message.text?.slice(e.offset, e.offset + e.length).toLowerCase() ===
         `@${BOT_USERNAME.toLowerCase()}`
   );
 
-  if ('text' in message && (isPrivate || (isGroup && mentionedEntity))) {
+  if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
     if (mentionedEntity) {
       ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
     }
@@ -247,52 +289,10 @@ bot.action('refresh_users', async (ctx) => {
 });
 
 // --- Vercel Export ---
-export default async (req: VercelRequest, res: VercelResponse) => {
-  try {
-    // Validate request method
-    if (req.method !== 'POST') {
-      console.warn(`Invalid request method: ${req.method}`);
-      return res.status(405).json({ error: 'Method Not Allowed' });
-    }
-
-    // Validate request body
-    if (!req.body) {
-      console.error('Request body is empty');
-      return res.status(400).json({ error: 'Empty request body' });
-    }
-
-    // Validate update_id
-    if (!('update_id' in req.body)) {
-      console.error('Invalid Telegram update: missing update_id', JSON.stringify(req.body));
-      return res.status(400).json({ error: 'Invalid Telegram update: missing update_id' });
-    }
-
-    // Process the Telegram update
-    await bot.handleUpdate(req.body);
-    return res.status(200).json({ status: 'OK' });
-  } catch (err) {
-    console.error('Vercel handler error:', err);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
+export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
+  await production(req, res, bot);
 };
 
-// --- Bot Launch ---
 if (ENVIRONMENT !== 'production') {
-  // Use polling for development
-  bot.launch({ dropPendingUpdates: true }).then(() => {
-    console.log('EduHub Bot is running locally with polling...');
-  });
-
-  // Handle graceful shutdown
-  process.once('SIGINT', () => {
-    console.log('Received SIGINT. Stopping bot...');
-    bot.stop('SIGINT');
-  });
-  process.once('SIGTERM', () => {
-    console.log('Received SIGTERM. Stopping bot...');
-    bot.stop('SIGTERM');
-  });
-} else {
-  // In production, rely on Vercel webhooks (no bot.launch)
-  console.log('Bot configured for webhooks in production mode');
+  development(bot);
 }
