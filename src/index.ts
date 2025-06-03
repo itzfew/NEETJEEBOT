@@ -1,14 +1,14 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import Tesseract from 'tesseract.js';
-import path from 'path';
 
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
+
+
 import { about } from './commands/about';
-import { greeting } from './text/greeting';
+import { greeting } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
@@ -27,17 +27,6 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Configure Tesseract.js for Node.js environment
-const tesseractConfig = {
-  corePath: process.env.NODE_ENV === 'production'
-    ? '/var/task/node_modules/tesseract.js-core/tesseract-core.wasm'
-    : path.join(__dirname, '../node_modules/tesseract.js-core/tesseract-core.wasm'),
-  langPath: 'https://tessdata.projectnaptha.com/4.0.0', // Use hosted language data
-  logger: (m: any) => console.log(m), // Log progress for debugging
-  workerPath: undefined, // Explicitly disable Web Workers
-  workerBlobURL: false, // Prevent Web Worker blob creation
-};
-
 // --- Commands ---
 
 bot.command('add', async (ctx) => {
@@ -48,65 +37,10 @@ bot.command('add', async (ctx) => {
     },
   });
 });
-
 bot.command('translate', handleTranslateCommand);
-
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
   await about()(ctx);
-});
-
-// OCR command to extract text from images
-bot.command('ocr', async (ctx) => {
-  const chat = ctx.chat;
-  const user = ctx.from;
-  const message = ctx.message;
-
-  if (!chat || !user || !message) return;
-
-  // Check if the message is a reply to another message
-  if (!('reply_to_message' in message) || !message.reply_to_message) {
-    return ctx.reply('Please reply to an image with /ocr to extract text.');
-  }
-
-  const repliedMessage = message.reply_to_message;
-
-  // Check if the replied message contains an image
-  if (!('photo' in repliedMessage) || !repliedMessage.photo) {
-    return ctx.reply('The replied message does not contain an image.');
-  }
-
-  try {
-    // Get the largest photo size (highest resolution)
-    const photo = repliedMessage.photo[repliedMessage.photo.length - 1];
-    const fileId = photo.file_id;
-
-    // Get the file path from Telegram
-    const file = await ctx.telegram.getFile(fileId);
-    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
-
-    // Perform OCR directly with Tesseract.recognize
-    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', tesseractConfig);
-
-    // Log the OCR command
-    await logMessage(chat.id, '/ocr', user);
-
-    // Send the extracted text back to the user
-    if (text.trim()) {
-      await ctx.reply(`Extracted text:\n\n${text}`);
-    } else {
-      await ctx.reply('No text could be extracted from the image.');
-    }
-  } catch (err) {
-    console.error('OCR processing failed:', err);
-    await ctx.reply('❌ Failed to process the image for OCR. Please try a different image or try again later.');
-    // Forward error to admin for debugging
-    await ctx.telegram.sendMessage(
-      ADMIN_ID,
-      `*OCR Error*\n\n*Chat ID:* ${chat.id}\n*Error:* ${err.message}\n*Stack:* ${err.stack || 'No stack trace available'}`,
-      { parse_mode: 'Markdown' }
-    );
-  }
 });
 
 bot.command('start', async (ctx) => {
