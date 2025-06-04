@@ -1,14 +1,13 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-
+import axios from 'axios';
+import FormData from 'form-data';
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
-
-
 import { about } from './commands/about';
-import { greeting } from './text/greeting'; // import checkMembership here
+import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
@@ -20,6 +19,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
 const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
+const OCR_API_KEY = 'f65759447b88957'; // Your OCR.Space API key
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 
@@ -27,7 +27,76 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// --- Commands ---
+// --- OCR Command Handler ---
+bot.command('ocr', async (ctx) => {
+  if (!isPrivateChat(ctx.chat?.type)) {
+    return ctx.reply('Please use the /ocr command in a private chat.');
+  }
+
+  const message = ctx.message;
+  const user = ctx.from;
+  const chat = ctx.chat;
+
+  if (!chat || !user) return;
+
+  // Check if the message is a reply to an image or contains an image
+  let photo;
+  if (message.reply_to_message?.photo) {
+    photo = message.reply_to_message.photo;
+  } else if (message.photo) {
+    photo = message.photo;
+  } else {
+    return ctx.reply('Please send an image or reply to an image with /ocr to extract text.');
+  }
+
+  try {
+    // Get the largest photo size
+    const largestPhoto = photo[photo.length - 1];
+    const fileId = largestPhoto.file_id;
+
+    // Get file link from Telegram
+    const file = await ctx.telegram.getFile(fileId);
+    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
+
+    // Download the image
+    const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+    const imageBuffer = Buffer.from(response.data);
+
+    // Prepare FormData for OCR.Space API
+    const form = new FormData();
+    form.append('file', imageBuffer, { filename: 'image.jpg' });
+    form.append('language', 'eng'); // Set language to English (modify as needed)
+    form.append('isOverlayRequired', 'true'); // Include overlay for parsed text
+    form.append('filetype', 'JPG'); // Specify file type
+    form.append('detectOrientation', 'true');
+    form.append('scale', 'true');
+    form.append('OCREngine', '2'); // Use OCR Engine 2 for better accuracy
+
+    // Make request to OCR.Space API
+    const ocrResponse = await axios.post('https://api.ocr.space/parse/image', form, {
+      headers: {
+        ...form.getHeaders(),
+        apikey: OCR_API_KEY,
+      },
+    });
+
+    const parsedResults = ocrResponse.data.ParsedResults;
+    if (!parsedResults || parsedResults.length === 0) {
+      return ctx.reply('No text found in the image or an error occurred.');
+    }
+
+    const extractedText = parsedResults[0].ParsedText || 'No text extracted.';
+    await ctx.reply(`📝 Extracted Text:\n\n${extractedText}`);
+
+    // Log the OCR request
+    await logMessage(chat.id, '/ocr', user);
+  } catch (err) {
+    console.error('Error processing OCR:', err);
+    await ctx.reply('❌ Error processing the image. Please try again.');
+  }
+});
+
+// --- Existing Commands ---
 
 bot.command('add', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
@@ -37,6 +106,7 @@ bot.command('add', async (ctx) => {
     },
   });
 });
+
 bot.command('translate', handleTranslateCommand);
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
@@ -113,7 +183,6 @@ bot.command('logs', async (ctx) => {
 setupBroadcast(bot);
 
 // --- Main Handler: Log + Search ---
-
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
