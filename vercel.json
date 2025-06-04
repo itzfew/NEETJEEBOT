@@ -6,10 +6,11 @@
       "use": "@vercel/node",
       "config": {
         "includeFiles": [
-          "node_modules/tesseract.js-core/**/*",
-          "node_modules/tesseract.js/src/worker.min.js",
-          "node_modules/tesseract.js-ocr-traineddata/4.0.0/eng.traineddata.gz"
-        ]
+          "node_modules/tesseract.js-core/tesseract-core-simd.wasm",
+          "node_modules/tesseract.js/src/worker.min.js"
+        ],
+        "memory": 2048,
+        "maxDuration": 60
       }
     }
   ],
@@ -18,11 +19,5 @@
       "src": "/(.*)",
       "dest": "api/index.ts"
     }
-  ],
-  "functions": {
-    "api/index.ts": {
-      "memory": 2048,
-      "maxDuration": 60
-    }
-  }
+  ]
 }
