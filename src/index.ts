@@ -10,7 +10,6 @@ import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
-import path from 'path';
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
@@ -19,6 +18,9 @@ const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
 const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
+
+// In-memory cache to track processed image file IDs
+const processedImages = new Set<string>();
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 
@@ -49,21 +51,40 @@ bot.command('ocr', async (ctx) => {
   }
 
   try {
+    // Get the highest resolution photo
+    const fileId = photo[photo.length - 1].file_id;
+
+    // Check if the image has already been processed
+    if (processedImages.has(fileId)) {
+      return ctx.reply('This image has already been processed. Please send a new image.', {
+        reply_to_message_id: message.message_id,
+      });
+    }
+
     // Send a loading message
     const loadingMessage = await ctx.reply('Processing image, please wait...', {
       reply_to_message_id: message.message_id,
     });
 
-    // Get the highest resolution photo
-    const fileId = photo[photo.length - 1].file_id;
+    // Get file details
     const file = await ctx.telegram.getFile(fileId);
     const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
 
+    // Validate file format
+    const fileExtension = file.file_path?.split('.').pop()?.toLowerCase();
+    const supportedFormats = ['jpg', 'jpeg', 'png', 'bmp', 'tiff'];
+    if (!fileExtension || !supportedFormats.includes(fileExtension)) {
+      await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
+      return ctx.reply(
+        `❌ Unsupported file format. Please use an image in one of these formats: ${supportedFormats.join(', ')}.`,
+        { reply_to_message_id: message.message_id }
+      );
+    }
+
     // Perform OCR with Tesseract.js
-    const corePath = path.join(__dirname, '../node_modules/tesseract.js-core/tesseract-core-simd.wasm');
     const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
-      corePath, // Use local WASM file included in build
-      langPath: 'https://tessdata.projectnaptha.com/4.0.0', // CDN for language data
+      corePath: 'https://unpkg.com/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm',
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0',
     });
 
     // Clean up the extracted text
@@ -77,6 +98,9 @@ bot.command('ocr', async (ctx) => {
       reply_to_message_id: message.message_id,
     });
 
+    // Mark the image as processed
+    processedImages.add(fileId);
+
     // Log the OCR command
     await logMessage(chat.id, `/ocr: ${cleanedText.slice(0, 100)}...`, user);
 
@@ -88,7 +112,7 @@ bot.command('ocr', async (ctx) => {
 
       await ctx.telegram.sendMessage(
         ADMIN_ID,
-        `* ABOVE OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
+        `*OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
         { parse_mode: 'Markdown' }
       );
       // Forward the image to admin
@@ -96,7 +120,10 @@ bot.command('ocr', async (ctx) => {
     }
   } catch (err) {
     console.error('OCR Error:', err);
-    await ctx.reply(`❌ Error processing image: ${err.message || 'Unknown error'}. Please try again or ensure the image contains clear text.`);
+    await ctx.reply(
+      `❌ Error processing image: ${err.message || 'Unknown error'}. Please ensure the image contains clear text or is in a supported format (JPG, JPEG, PNG, BMP, TIFF).`,
+      { reply_to_message_id: message.message_id }
+    );
   }
 });
 
@@ -164,7 +191,7 @@ bot.command('logs', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return;
   const parts = ctx.message?.text?.split(' ') || [];
   if (parts.length < 2)
-    return ctx.reply("Usage: /logs <YYYY-MM-DD> or /logs <chatid>");
+    return ctx.reply('Usage: /logs <YYYY-MM-DD> or /logs <chatid>');
 
   const dateOrChatId = parts[1];
   try {
@@ -195,7 +222,7 @@ bot.on('message', async (ctx) => {
 
   if (!chat?.id || !user) return;
 
-  const alreadyNotified = await saveToFirebase(chat);
+  const alreadyNotified = await saveToFirebase([]);
 
   // Logging
   if (isPrivateChat(chat.type)) {
@@ -254,7 +281,7 @@ bot.on('message', async (ctx) => {
     (e) =>
       e.type === 'mention' &&
       message.text?.slice(e.offset, e.offset + e.length).toLowerCase() ===
-        `@${BOT_USERNAME.toLowerCase()}`
+      `@${BOT_USERNAME}`
   );
 
   if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
@@ -281,22 +308,22 @@ bot.on('message', async (ctx) => {
 // --- New Group Members ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
-    const name = member.first_name || 'there';
+    const name = member.first_name || 'Unknown';
     if (member.username === ctx.botInfo?.username) {
-      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
+      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtgrok* to get study material or /ocr to extract images.`, {
         parse_mode: 'Markdown',
       });
     } else {
-      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
+      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtgrok* to get study material or /ocr to extract images.`, {
         parse_mode: 'Markdown',
       });
     }
   }
 });
 
-// --- Refresh Inline Button ---
+// --- Refresh button ---
 bot.action('refresh_users', async (ctx) => {
-  if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
+  if (ctx.from?.id !== ADMIN_ID) return ctx.actionCbQuery('Unauthorized');
   try {
     const chatIds = await fetchChatIdsFromFirebase();
     await ctx.editMessageText(`📊 Total interacting entities: ${chatIds.length} (refreshed)`, {
@@ -305,10 +332,10 @@ bot.action('refresh_users', async (ctx) => {
         inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
       },
     });
-    await ctx.answerCbQuery('Refreshed!');
+    await ctx.actionCbQuery('Refreshed!');
   } catch (err) {
     console.error('Failed to refresh user count:', err);
-    await ctx.answerCbQuery('Refresh failed');
+    await ctx.actionCbQuery('Refresh failed');
   }
 });
 
@@ -319,4 +346,3 @@ export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
 
 if (ENVIRONMENT !== 'production') {
   development(bot);
-}
