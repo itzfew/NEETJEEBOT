@@ -10,7 +10,7 @@
     "tesseract.js": "^5.1.0",
     "axios": "^1.7.7",
     "cashfree-pg": "^4.2.6",
-    "dotenv": "^7.4.2",
+    "dotenv-cli": "^7.0.0",
     "firebase": "^8.10.0",
     "telegraf": "^4.16.3",
     "node-fetch": "^2.7.0",
