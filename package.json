@@ -1,7 +1,7 @@
 {
   "name": "Eduhub",
-  "version": "1.1.1",
-  "description": "Telegram Bot EduHub",
+  "version": "1.2.0",
+  "description": "Telegram Bot EduHub with OCR support",
   "main": "src/index.ts",
   "author": "itzfew (https://t.me/itzfew)",
   "homepage": "https://github.com/itzfew/eduhub-bot",
@@ -13,13 +13,15 @@
     "firebase": "^9.22.2",
     "telegraf": "^4.16.3",
     "node-fetch": "^3.3.2",
-    "google-spreadsheet": "^3.3.0"
+    "google-spreadsheet": "^3.3.0",
+    "tesseract.js": "^5.2.0"
   },
   "devDependencies": {
     "@types/axios": "^0.14.0",
     "@types/debug": "^4.1.12",
     "@types/node": "^22.8.6",
     "@types/node-fetch": "^2.6.11",
+    "@types/tesseract.js": "^0.0.4",
     "@vercel/ncc": "^0.38.2",
     "debug": "^4.3.7",
     "nodemon": "^3.1.7",
@@ -32,7 +34,7 @@
     "dev:watch": "DEBUG=bot* dotenv -e .env -- nodemon -e ts -x ts-node src/index.ts",
     "build": "ncc build src/index.ts -o public -m",
     "prettier": "prettier --write 'src/**/*.ts'",
-    "lint": "tsc --noemit",
+    "lint": "tsc --noEmit",
     "start": "node public/index.js"
   },
   "engines": {
