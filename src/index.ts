@@ -10,6 +10,7 @@ import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
+import path from 'path';
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
@@ -82,9 +83,10 @@ bot.command('ocr', async (ctx) => {
     }
 
     // Perform OCR with Tesseract.js
+    const corePath = path.join(__dirname, 'node_modules/tesseract.js-core/tesseract-core-simd.wasm');
     const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
-      corePath: 'https://unpkg.com/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm',
-      langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+      corePath, // Local WASM file included in build
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0', // CDN for language data
     });
 
     // Clean up the extracted text
@@ -214,7 +216,6 @@ bot.command('logs', async (ctx) => {
 setupBroadcast(bot);
 
 // --- Main Handler: Log + Search ---
-
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
@@ -222,7 +223,7 @@ bot.on('message', async (ctx) => {
 
   if (!chat?.id || !user) return;
 
-  const alreadyNotified = await saveToFirebase([]);
+  const alreadyNotified = await saveToFirebase(chat);
 
   // Logging
   if (isPrivateChat(chat.type)) {
@@ -281,7 +282,7 @@ bot.on('message', async (ctx) => {
     (e) =>
       e.type === 'mention' &&
       message.text?.slice(e.offset, e.offset + e.length).toLowerCase() ===
-      `@${BOT_USERNAME}`
+      `@${BOT_USERNAME.toLowerCase()}`
   );
 
   if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
@@ -308,22 +309,22 @@ bot.on('message', async (ctx) => {
 // --- New Group Members ---
 bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
-    const name = member.first_name || 'Unknown';
+    const name = member.first_name || 'there';
     if (member.username === ctx.botInfo?.username) {
-      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtgrok* to get study material or /ocr to extract images.`, {
+      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
         parse_mode: 'Markdown',
       });
     } else {
-      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtgrok* to get study material or /ocr to extract images.`, {
+      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
         parse_mode: 'Markdown',
       });
     }
   }
 });
 
-// --- Refresh button ---
+// --- Refresh Inline Button ---
 bot.action('refresh_users', async (ctx) => {
-  if (ctx.from?.id !== ADMIN_ID) return ctx.actionCbQuery('Unauthorized');
+  if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
   try {
     const chatIds = await fetchChatIdsFromFirebase();
     await ctx.editMessageText(`📊 Total interacting entities: ${chatIds.length} (refreshed)`, {
@@ -332,10 +333,10 @@ bot.action('refresh_users', async (ctx) => {
         inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
       },
     });
-    await ctx.actionCbQuery('Refreshed!');
+    await ctx.answerCbQuery('Refreshed!');
   } catch (err) {
     console.error('Failed to refresh user count:', err);
-    await ctx.actionCbQuery('Refresh failed');
+    await ctx.answerCbQuery('Refresh failed');
   }
 });
 
@@ -346,3 +347,4 @@ export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
 
 if (ENVIRONMENT !== 'production') {
   development(bot);
+}
