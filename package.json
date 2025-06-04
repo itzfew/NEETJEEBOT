@@ -8,6 +8,7 @@
   "dependencies": {
     "@vercel/node": "^3.2.24",
     "tesseract.js": "^5.1.0",
+    "tesseract.js-ocr-traineddata": "^4.0.0",
     "axios": "^1.6.7",
     "cashfree-pg": "^4.2.6",
     "dotenv-cli": "^7.4.2",
@@ -31,7 +32,7 @@
   "scripts": {
     "dev": "DEBUG=bot* dotenv -e .env -- ts-node src/index.ts",
     "dev:watch": "DEBUG=bot* dotenv -e .env -- nodemon -e ts -x ts-node src/index.ts",
-    "build": "ncc build src/index.ts -o public -m",
+    "build": "ncc build src/index.ts -o public -m --external tesseract.js-core --external tesseract.js",
     "prettier": "prettier --write 'src/**/*.ts'",
     "lint": "tsc --noemit",
     "start": "node public/index.js"
