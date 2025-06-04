@@ -1,16 +1,17 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import Tesseract from 'tesseract.js';
+
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
+
+
 import { about } from './commands/about';
-import { greeting } from './text/greeting';
+import { greeting } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
-import path from 'path';
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
@@ -20,114 +21,11 @@ const ENVIRONMENT = process.env.NODE_ENV || '';
 const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
 
-// In-memory cache to track processed image file IDs
-const processedImages = new Set<string>();
-
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
-
-// --- OCR Command ---
-bot.command('ocr', async (ctx) => {
-  const chat = ctx.chat;
-  const user = ctx.from;
-  const message = ctx.message;
-
-  if (!chat || !user) return;
-
-  // Check if the message is a reply to an image or contains an image
-  const repliedMessage = ctx.message.reply_to_message;
-  let photo;
-
-  if (repliedMessage && 'photo' in repliedMessage) {
-    photo = repliedMessage.photo;
-  } else if ('photo' in message) {
-    photo = message.photo;
-  }
-
-  if (!photo) {
-    return ctx.reply('Please send an image or reply to an image with /ocr.');
-  }
-
-  try {
-    // Get the highest resolution photo
-    const fileId = photo[photo.length - 1].file_id;
-
-    // Check if the image has already been processed
-    if (processedImages.has(fileId)) {
-      return ctx.reply('This image has already been processed. Please send a new image.', {
-        reply_to_message_id: message.message_id,
-      });
-    }
-
-    // Send a loading message
-    const loadingMessage = await ctx.reply('Processing image, please wait...', {
-      reply_to_message_id: message.message_id,
-    });
-
-    // Get file details
-    const file = await ctx.telegram.getFile(fileId);
-    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
-
-    // Validate file format
-    const fileExtension = file.file_path?.split('.').pop()?.toLowerCase();
-    const supportedFormats = ['jpg', 'jpeg', 'png', 'bmp', 'tiff'];
-    if (!fileExtension || !supportedFormats.includes(fileExtension)) {
-      await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
-      return ctx.reply(
-        `❌ Unsupported file format. Please use an image in one of these formats: ${supportedFormats.join(', ')}.`,
-        { reply_to_message_id: message.message_id }
-      );
-    }
-
-    // Perform OCR with Tesseract.js
-    const corePath = path.join(__dirname, 'node_modules', 'tesseract.js-core', 'tesseract-core-simd.wasm');
-    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
-      corePath, // Local WASM file included in build
-      langPath: 'https://tessdata.projectnaptha.com/4.0.0', // CDN for language data
-    });
-
-    // Clean up the extracted text
-    const cleanedText = text.trim() || 'No text could be extracted from the image.';
-
-    // Delete the loading message
-    await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
-
-    // Reply with the extracted text
-    await ctx.reply(`📄 Extracted Text:\n\n${cleanedText}`, {
-      reply_to_message_id: message.message_id,
-    });
-
-    // Mark the image as processed
-    processedImages.add(fileId);
-
-    // Log the OCR command
-    await logMessage(chat.id, `/ocr: ${cleanedText.slice(0, 100)}...`, user);
-
-    // Notify admin about OCR usage
-    if (chat.id !== ADMIN_ID) {
-      const name = user.first_name || chat.title || 'Unknown';
-      const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
-      const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-      await ctx.telegram.sendMessage(
-        ADMIN_ID,
-        `*OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
-        { parse_mode: 'Markdown' }
-      );
-      // Forward the image to admin
-      await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
-    }
-  } catch (err) {
-    console.error('OCR Error:', err);
-    await ctx.reply(
-      `❌ Error processing image: ${err.message || 'Unknown error'}. Please ensure the image contains clear text or is in a supported format (JPG, JPEG, PNG, BMP, TIFF).`,
-      { reply_to_message_id: message.message_id }
-    );
-  }
-});
 
 // --- Commands ---
 
@@ -139,7 +37,6 @@ bot.command('add', async (ctx) => {
     },
   });
 });
-
 bot.command('translate', handleTranslateCommand);
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
@@ -193,7 +90,7 @@ bot.command('logs', async (ctx) => {
   if (ctx.from?.id !== ADMIN_ID) return;
   const parts = ctx.message?.text?.split(' ') || [];
   if (parts.length < 2)
-    return ctx.reply('Usage: /logs <YYYY-MM-DD> or /logs <chatid>');
+    return ctx.reply("Usage: /logs <YYYY-MM-DD> or /logs <chatid>");
 
   const dateOrChatId = parts[1];
   try {
@@ -216,6 +113,7 @@ bot.command('logs', async (ctx) => {
 setupBroadcast(bot);
 
 // --- Main Handler: Log + Search ---
+
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
@@ -282,7 +180,7 @@ bot.on('message', async (ctx) => {
     (e) =>
       e.type === 'mention' &&
       message.text?.slice(e.offset, e.offset + e.length).toLowerCase() ===
-      `@${BOT_USERNAME.toLowerCase()}`
+        `@${BOT_USERNAME.toLowerCase()}`
   );
 
   if (message.text && (isPrivate || (isGroup && mentionedEntity))) {
@@ -311,11 +209,11 @@ bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
     if (member.username === ctx.botInfo?.username) {
-      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
+      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
         parse_mode: 'Markdown',
       });
     } else {
-      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
+      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
         parse_mode: 'Markdown',
       });
     }
