@@ -1,14 +1,12 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-
+import Tesseract from 'tesseract.js'; // Import Tesseract.js for OCR
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
-
-
 import { about } from './commands/about';
-import { greeting } from './text/greeting'; // import checkMembership here
+import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
@@ -37,6 +35,7 @@ bot.command('add', async (ctx) => {
     },
   });
 });
+
 bot.command('translate', handleTranslateCommand);
 bot.command('about', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
@@ -111,6 +110,70 @@ bot.command('logs', async (ctx) => {
 
 // Admin: /broadcast
 setupBroadcast(bot);
+
+// --- OCR Command ---
+bot.command('ocr', async (ctx) => {
+  const chat = ctx.chat;
+  const user = ctx.from;
+  const message = ctx.message;
+
+  if (!chat || !user) return;
+
+  // Check if the message is a reply to an image or contains an image
+  const repliedMessage = ctx.message.reply_to_message;
+  let photo;
+
+  if (repliedMessage && 'photo' in repliedMessage) {
+    photo = repliedMessage.photo;
+  } else if ('photo' in message) {
+    photo = message.photo;
+  }
+
+  if (!photo) {
+    return ctx.reply('Please send an image or reply to an image with /ocr.');
+  }
+
+  try {
+    // Get the highest resolution photo
+    const fileId = photo[photo.length - 1].file_id;
+    const file = await ctx.telegram.getFile(fileId);
+    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
+
+    // Perform OCR using Tesseract.js
+    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
+      logger: (m) => console.log(m), // Optional: Log OCR progress
+    });
+
+    // Clean up the extracted text
+    const cleanedText = text.trim() || 'No text could be extracted from the image.';
+
+    // Reply with the extracted text
+    await ctx.reply(`📄 Extracted Text:\n\n${cleanedText}`, {
+      reply_to_message_id: message.message_id,
+    });
+
+    // Log the OCR command
+    await logMessage(chat.id, `/ocr: ${cleanedText.slice(0, 100)}...`, user);
+
+    // Notify admin about OCR usage
+    if (chat.id !== ADMIN_ID) {
+      const name = user.first_name || chat.title || 'Unknown';
+      const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
+      const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+      await ctx.telegram.sendMessage(
+        ADMIN_ID,
+        `*OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
+        { parse_mode: 'Markdown' }
+      );
+      // Forward the image to admin
+      await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
+    }
+  } catch (err) {
+    console.error('OCR Error:', err);
+    await ctx.reply('❌ Error processing image. Please try again.');
+  }
+});
 
 // --- Main Handler: Log + Search ---
 
@@ -209,11 +272,11 @@ bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     const name = member.first_name || 'there';
     if (member.username === ctx.botInfo?.username) {
-      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
+      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
         parse_mode: 'Markdown',
       });
     } else {
-      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
+      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material or /ocr to extract text from images.`, {
         parse_mode: 'Markdown',
       });
     }
