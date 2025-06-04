@@ -10,8 +10,6 @@ import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
-import path from 'path';
-import fs from 'fs';
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
@@ -26,28 +24,6 @@ if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
-
-// --- Tesseract.js Configuration ---
-const tesseractWorkerPath = path.join(__dirname, '../node_modules/tesseract.js-core/tesseract-core-simd.wasm');
-
-// Ensure Tesseract.js WASM files are accessible
-const initializeTesseract = async () => {
-  try {
-    const worker = Tesseract.createWorker({
-      corePath: 'https://unpkg.com/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm',
-      workerPath: 'https://unpkg.com/tesseract.js@v5.1.0/dist/worker.min.js',
-      langPath: 'https://tessdata.projectnaptha.com/4.0.0', // CDN for language data
-      logger: (m) => console.log(m), // Log Tesseract progress
-    });
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    return worker;
-  } catch (err) {
-    console.error('Failed to initialize Tesseract:', err);
-    throw err;
-  }
-};
 
 // --- Commands ---
 
@@ -69,7 +45,7 @@ bot.command('about', async (ctx) => {
 bot.command('start', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
-  if (!CHAT || !user) return;
+  if (!chat || !user) return;
 
   const alreadyNotified = await saveToFirebase(chat);
 
@@ -168,44 +144,39 @@ bot.command('ocr', async (ctx) => {
     const file = await ctx.telegram.getFile(fileId);
     const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
 
-    // Initialize Tesseract worker
-    const worker = await initializeTesseract();
+    // Perform OCR directly with Tesseract.js
+    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
+      corePath: 'https://unpkg.com/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm',
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+    });
 
-    try {
-      // Perform OCR
-      const { data: { text } } = await worker.recognize(fileUrl);
+    // Clean up the extracted text
+    const cleanedText = text.trim() || 'No text could be extracted from the image.';
 
-      // Clean up the extracted text
-      const cleanedText = text.trim() || 'No text could be extracted from the image.';
+    // Delete the loading message
+    await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
 
-      // Delete the loading message
-      await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
+    // Reply with the extracted text
+    await ctx.reply(`📄 Extracted Text:\n\n${cleanedText}`, {
+      reply_to_message_id: message.message_id,
+    });
 
-      // Reply with the extracted text
-      await ctx.reply(`📄 Extracted Text:\n\n${cleanedText}`, {
-        reply_to_message_id: message.message_id,
-      });
+    // Log the OCR command
+    await logMessage(chat.id, `/ocr: ${cleanedText.slice(0, 100)}...`, user);
 
-      // Log the OCR command
-      await logMessage(chat.id, `/ocr: ${cleanedText.slice(0, 100)}...`, user);
+    // Notify admin about OCR usage
+    if (chat.id !== ADMIN_ID) {
+      const name = user.first_name || chat.title || 'Unknown';
+      const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
+      const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-      // Notify admin about OCR usage
-      if (chat.id !== ADMIN_ID) {
-        const name = user.first_name || chat.title || 'Unknown';
-        const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
-        const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-        await ctx.telegram.sendMessage(
-          ADMIN_ID,
-          `*OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
-          { parse_mode: 'Markdown' }
-        );
-        // Forward the image to admin
-        await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
-      }
-    } finally {
-      // Terminate the worker to free resources
-      await worker.terminate();
+      await ctx.telegram.sendMessage(
+        ADMIN_ID,
+        `*OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
+        { parse_mode: 'Markdown' }
+      );
+      // Forward the image to admin
+      await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
     }
   } catch (err) {
     console.error('OCR Error:', err);
