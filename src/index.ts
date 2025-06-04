@@ -1,12 +1,14 @@
 import { Telegraf, Context } from 'telegraf';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { createWorker } from 'tesseract.js'; // Import Tesseract.js for OCR
+
 import { fetchChatIdsFromFirebase, getLogsByDate } from './utils/chatStore';
 import { saveToFirebase } from './utils/saveToFirebase';
 import { logMessage } from './utils/logMessage';
 import { handleTranslateCommand } from './commands/translate';
+
+
 import { about } from './commands/about';
-import { greeting } from './text/greeting';
+import { greeting } from './text/greeting'; // import checkMembership here
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
@@ -25,15 +27,8 @@ console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Initialize Tesseract worker (do this once globally)
-const ocrWorker = createWorker();
-(async () => {
-  await ocrWorker.load();
-  await ocrWorker.loadLanguage('eng');
-  await ocrWorker.initialize('eng');
-})();
-
 // --- Commands ---
+
 bot.command('add', async (ctx) => {
   if (!isPrivateChat(ctx.chat?.type)) return;
   await ctx.reply('Please share through this bot: @NeetAspirantsBot', {
@@ -117,7 +112,8 @@ bot.command('logs', async (ctx) => {
 // Admin: /broadcast
 setupBroadcast(bot);
 
-// --- Main Handler: Log + Search + OCR ---
+// --- Main Handler: Log + Search ---
+
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
   const user = ctx.from;
@@ -159,49 +155,21 @@ bot.on('message', async (ctx) => {
     } catch (err) {
       console.error('Failed to log message:', err);
     }
-  }
 
-  // OCR for images with /ocr command
-  if (message.text?.toLowerCase().startsWith('/ocr') && message.reply_to_message?.photo) {
-    try {
-      const photo = message.reply_to_message.photo[message.reply_to_message.photo.length - 1]; // Get highest resolution
-      const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+    // Forward non-text messages to admin
+    if (!message.text) {
+      const name = user.first_name || 'Unknown';
+      const username = user.username ? `@${user.username}` : 'N/A';
+      const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-      // Perform OCR using Tesseract
-      const { data: { text } } = await ocrWorker.recognize(fileLink.href);
-      await ctx.reply(`Extracted text:\n\n${text}`);
-      await logMessage(chat.id, `[OCR performed on image]`, user);
-    } catch (err) {
-      console.error('OCR error:', err);
-      await ctx.reply('❌ Failed to perform OCR on the image.');
-    }
-  } else if (message.text?.toLowerCase().startsWith('/ocr') && !message.reply_to_message?.photo) {
-    await ctx.reply('Please reply to an image with /ocr to extract text.');
-  }
+      const header = `*Non-text message received!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n`;
 
-  // Handle non-image files
-  if (message.document && message.text?.toLowerCase().startsWith('/ocr')) {
-    const mimeType = message.document.mime_type || '';
-    if (!mimeType.startsWith('image/')) {
-      await ctx.reply('This file type is not supported for OCR. Please send an image directly.');
-      await logMessage(chat.id, `[Unsupported file for OCR: ${message.document.file_name || 'Unnamed'}]`, user);
-      return;
-    }
-  }
-
-  // Forward non-text messages to admin
-  if (!message.text) {
-    const name = user.first_name || 'Unknown';
-    const username = user.username ? `@${user.username}` : 'N/A';
-    const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-    const header = `*Non-text message received!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n`;
-
-    try {
-      await ctx.telegram.sendMessage(ADMIN_ID, header, { parse_mode: 'Markdown' });
-      await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
-    } catch (err) {
-      console.error('Failed to forward non-text message:', err);
+      try {
+        await ctx.telegram.sendMessage(ADMIN_ID, header, { parse_mode: 'Markdown' });
+        await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
+      } catch (err) {
+        console.error('Failed to forward non-text message:', err);
+      }
     }
   }
 
@@ -274,11 +242,6 @@ bot.action('refresh_users', async (ctx) => {
 export const startVercel = async (req: VercelRequest, res: VercelResponse) => {
   await production(req, res, bot);
 };
-
-// Terminate Tesseract worker on process exit
-process.on('exit', async () => {
-  await ocrWorker.terminate();
-});
 
 if (ENVIRONMENT !== 'production') {
   development(bot);
