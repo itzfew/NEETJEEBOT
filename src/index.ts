@@ -10,6 +10,7 @@ import { greeting } from './text/greeting';
 import { production, development } from './core';
 import { setupBroadcast } from './commands/broadcast';
 import { studySearch } from './commands/study';
+import path from 'path';
 
 // Helper to check private chat type
 const isPrivateChat = (type?: string) => type === 'private';
@@ -24,6 +25,80 @@ if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
 console.log(`Running bot in ${ENVIRONMENT} mode`);
 
 const bot = new Telegraf(BOT_TOKEN);
+
+// --- OCR Command ---
+bot.command('ocr', async (ctx) => {
+  const chat = ctx.chat;
+  const user = ctx.from;
+  const message = ctx.message;
+
+  if (!chat || !user) return;
+
+  // Check if the message is a reply to an image or contains an image
+  const repliedMessage = ctx.message.reply_to_message;
+  let photo;
+
+  if (repliedMessage && 'photo' in repliedMessage) {
+    photo = repliedMessage.photo;
+  } else if ('photo' in message) {
+    photo = message.photo;
+  }
+
+  if (!photo) {
+    return ctx.reply('Please send an image or reply to an image with /ocr.');
+  }
+
+  try {
+    // Send a loading message
+    const loadingMessage = await ctx.reply('Processing image, please wait...', {
+      reply_to_message_id: message.message_id,
+    });
+
+    // Get the highest resolution photo
+    const fileId = photo[photo.length - 1].file_id;
+    const file = await ctx.telegram.getFile(fileId);
+    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
+
+    // Perform OCR with Tesseract.js
+    const corePath = path.join(__dirname, '../node_modules/tesseract.js-core/tesseract-core-simd.wasm');
+    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
+      corePath, // Use local WASM file included in build
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0', // CDN for language data
+    });
+
+    // Clean up the extracted text
+    const cleanedText = text.trim() || 'No text could be extracted from the image.';
+
+    // Delete the loading message
+    await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
+
+    // Reply with the extracted text
+    await ctx.reply(`📄 Extracted Text:\n\n${cleanedText}`, {
+      reply_to_message_id: message.message_id,
+    });
+
+    // Log the OCR command
+    await logMessage(chat.id, `/ocr: ${cleanedText.slice(0, 100)}...`, user);
+
+    // Notify admin about OCR usage
+    if (chat.id !== ADMIN_ID) {
+      const name = user.first_name || chat.title || 'Unknown';
+      const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
+      const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+      await ctx.telegram.sendMessage(
+        ADMIN_ID,
+        `* ABOVE OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
+        { parse_mode: 'Markdown' }
+      );
+      // Forward the image to admin
+      await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
+    }
+  } catch (err) {
+    console.error('OCR Error:', err);
+    await ctx.reply(`❌ Error processing image: ${err.message || 'Unknown error'}. Please try again or ensure the image contains clear text.`);
+  }
+});
 
 // --- Commands ---
 
@@ -110,79 +185,6 @@ bot.command('logs', async (ctx) => {
 
 // Admin: /broadcast
 setupBroadcast(bot);
-
-// --- OCR Command ---
-bot.command('ocr', async (ctx) => {
-  const chat = ctx.chat;
-  const user = ctx.from;
-  const message = ctx.message;
-
-  if (!chat || !user) return;
-
-  // Check if the message is a reply to an image or contains an image
-  const repliedMessage = ctx.message.reply_to_message;
-  let photo;
-
-  if (repliedMessage && 'photo' in repliedMessage) {
-    photo = repliedMessage.photo;
-  } else if ('photo' in message) {
-    photo = message.photo;
-  }
-
-  if (!photo) {
-    return ctx.reply('Please send an image or reply to an image with /ocr.');
-  }
-
-  try {
-    // Send a loading message
-    const loadingMessage = await ctx.reply('Processing image, please wait...', {
-      reply_to_message_id: message.message_id,
-    });
-
-    // Get the highest resolution photo
-    const fileId = photo[photo.length - 1].file_id;
-    const file = await ctx.telegram.getFile(fileId);
-    const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`;
-
-    // Perform OCR directly with Tesseract.js
-    const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
-      corePath: 'https://unpkg.com/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm',
-      langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-    });
-
-    // Clean up the extracted text
-    const cleanedText = text.trim() || 'No text could be extracted from the image.';
-
-    // Delete the loading message
-    await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
-
-    // Reply with the extracted text
-    await ctx.reply(`📄 Extracted Text:\n\n${cleanedText}`, {
-      reply_to_message_id: message.message_id,
-    });
-
-    // Log the OCR command
-    await logMessage(chat.id, `/ocr: ${cleanedText.slice(0, 100)}...`, user);
-
-    // Notify admin about OCR usage
-    if (chat.id !== ADMIN_ID) {
-      const name = user.first_name || chat.title || 'Unknown';
-      const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
-      const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-      await ctx.telegram.sendMessage(
-        ADMIN_ID,
-        `*OCR Command Used!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Time:* ${time}\n*Extracted Text (preview):* ${cleanedText.slice(0, 100)}...`,
-        { parse_mode: 'Markdown' }
-      );
-      // Forward the image to admin
-      await ctx.forwardMessage(ADMIN_ID, chat.id, message.message_id);
-    }
-  } catch (err) {
-    console.error('OCR Error:', err);
-    await ctx.reply('❌ Error processing image. Please try again or ensure the image contains clear text.');
-  }
-});
 
 // --- Main Handler: Log + Search ---
 
