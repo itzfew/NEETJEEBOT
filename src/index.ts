@@ -33,16 +33,16 @@ const tesseractWorkerPath = path.join(__dirname, '../node_modules/tesseract.js-c
 // Ensure Tesseract.js WASM files are accessible
 const initializeTesseract = async () => {
   try {
-    if (!fs.existsSync(tesseractWorkerPath)) {
-      console.error('Tesseract WASM file not found at:', tesseractWorkerPath);
-      throw new Error('Tesseract WASM file missing');
-    }
-    return Tesseract.createWorker('eng', 1, {
-      corePath: path.join(__dirname, '../node_modules/tesseract.js-core'),
-      workerPath: path.join(__dirname, '../node_modules/tesseract.js/src/worker.min.js'),
-      langPath: path.join(__dirname, '../node_modules/tesseract.js-ocr-traineddata/4.0.0'),
+    const worker = Tesseract.createWorker({
+      corePath: 'https://unpkg.com/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm',
+      workerPath: 'https://unpkg.com/tesseract.js@v5.1.0/dist/worker.min.js',
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0', // CDN for language data
       logger: (m) => console.log(m), // Log Tesseract progress
     });
+    await worker.load();
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+    return worker;
   } catch (err) {
     console.error('Failed to initialize Tesseract:', err);
     throw err;
@@ -158,6 +158,11 @@ bot.command('ocr', async (ctx) => {
   }
 
   try {
+    // Send a loading message
+    const loadingMessage = await ctx.reply('Processing image, please wait...', {
+      reply_to_message_id: message.message_id,
+    });
+
     // Get the highest resolution photo
     const fileId = photo[photo.length - 1].file_id;
     const file = await ctx.telegram.getFile(fileId);
@@ -168,13 +173,13 @@ bot.command('ocr', async (ctx) => {
 
     try {
       // Perform OCR
-      await worker.load();
-      await worker.loadLanguage('eng');
-      await worker.initialize('eng');
       const { data: { text } } = await worker.recognize(fileUrl);
 
       // Clean up the extracted text
       const cleanedText = text.trim() || 'No text could be extracted from the image.';
+
+      // Delete the loading message
+      await ctx.telegram.deleteMessage(chat.id, loadingMessage.message_id);
 
       // Reply with the extracted text
       await ctx.reply(`📄 Extracted Text:\n\n${cleanedText}`, {
