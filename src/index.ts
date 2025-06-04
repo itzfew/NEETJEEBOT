@@ -83,7 +83,7 @@ bot.command('ocr', async (ctx) => {
     }
 
     // Perform OCR with Tesseract.js
-    const corePath = path.join(__dirname, 'node_modules/tesseract.js-core/tesseract-core-simd.wasm');
+    const corePath = path.join(__dirname, 'node_modules', 'tesseract.js-core', 'tesseract-core-simd.wasm');
     const { data: { text } } = await Tesseract.recognize(fileUrl, 'eng', {
       corePath, // Local WASM file included in build
       langPath: 'https://tessdata.projectnaptha.com/4.0.0', // CDN for language data
