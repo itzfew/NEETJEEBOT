@@ -5,6 +5,10 @@
       "src": "api/index.ts",
       "use": "@vercel/node",
       "config": {
+        "includeFiles": [
+          "node_modules/tesseract.js-core/tesseract-core-simd.wasm",
+          "node_modules/tesseract.js/src/worker.min.js"
+        ],
         "memory": 2048,
         "maxDuration": 60
       }
