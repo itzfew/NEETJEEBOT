@@ -160,7 +160,8 @@
   {
   "title": "Allen PYQ",
   "items": [
-    { "label": "Allen 11 Years PYQs", "key": "allen-11-years-pyq" }
+    { "label": "Allen 11 Years PYQs", "key": "allen-11-years-pyq" },
+    { "label": "Allen PYQs upto 2025", "key": "allen-pyq-upto-2025" }
   ]
 },
 {
@@ -411,5 +412,13 @@
     { "label": "Lakshya Physics Hindi", "key": "lakshya-physics" },
     { "label": "Lakshya Chemistry Hindi ", "key": "lakshya-chemistry" }
   ]
-}
+},
+    {
+    "tittle":"Allen Modules 2026",
+    "items":[
+      {"label":"Allen 11th Physics modules 2026","key":"allen-2026-11th-Physics-module"},
+      {"label":"Allen 12th Physics modules 2026","key":"allen-2026-12th-Physics-module"}
+    ]
+    }
+  
 ]
