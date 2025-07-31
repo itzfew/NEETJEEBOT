@@ -1,9 +1,7 @@
 import { Context } from 'telegraf';
 import { fetchChatIdsFromFirebase } from '../utils/chatStore';
-import { getFirestore } from 'firebase-admin/firestore';
 
 const ADMIN_ID = 6930703214;
-const db = getFirestore();
 
 export const setupBroadcast = (bot: any) => {
   bot.command('broadcast', async (ctx: Context) => {
@@ -18,31 +16,21 @@ export const setupBroadcast = (bot: any) => {
       return ctx.reply('⚠️ Please reply to the message (text/media) you want to broadcast using /broadcast.');
     }
 
-    // Use message_id as a unique identifier for the broadcast
-    const broadcastId = reply.message_id.toString();
-
     try {
-      // Check if this broadcast has already been sent
-      const broadcastRef = db.collection('broadcasts').doc(broadcastId);
-      const broadcastDoc = await broadcastRef.get();
-
-      if (broadcastDoc.exists) {
-        return ctx.reply('⚠️ This message has already been broadcasted.');
-      }
-
-      const chatIds = await fetchChatIdsFromFirebase();
+      // Fetch unique chat IDs to prevent duplicates
+      const chatIds = [...new Set(await fetchChatIdsFromFirebase())];
       let sent = 0;
 
+      // Track sent chat IDs to avoid duplicates within the same broadcast
+      const sentChatIds = new Set<number>();
+
       for (const chatId of chatIds) {
+        // Skip if message was already sent to this chat ID
+        if (sentChatIds.has(chatId)) {
+          continue;
+        }
+
         try {
-          // Check if message was already sent to this chatId
-          const sentRef = db.collection('broadcasts').doc(broadcastId).collection('sent').doc(chatId.toString());
-          const sentDoc = await sentRef.get();
-
-          if (sentDoc.exists) {
-            continue; // Skip if already sent to this chat
-          }
-
           if (reply.text) {
             await ctx.telegram.sendMessage(chatId, reply.text, {
               parse_mode: 'Markdown',
@@ -66,21 +54,12 @@ export const setupBroadcast = (bot: any) => {
           } else {
             continue;
           }
-
-          // Mark as sent in Firebase
-          await sentRef.set({ sentAt: new Date().toISOString() });
+          sentChatIds.add(chatId);
           sent++;
         } catch (err) {
           console.error(`Failed to send to ${chatId}:`, err);
         }
       }
-
-      // Record the broadcast to prevent re-sending
-      await broadcastRef.set({
-        messageId: broadcastId,
-        broadcastAt: new Date().toISOString(),
-        totalSent: sent,
-      });
 
       await ctx.reply(`✅ Broadcast sent to ${sent}/${chatIds.length} users.`);
     } catch (err) {
