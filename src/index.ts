@@ -11,7 +11,6 @@ const isPrivateChat = (type?: string) => type === 'private';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const ENVIRONMENT = process.env.NODE_ENV || '';
-const ADMIN_ID = 6930703214;
 const BOT_USERNAME = 'SearchNEETJEEBot';
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN not provided!');
@@ -46,18 +45,6 @@ bot.command('start', async (ctx) => {
   if (isPrivateChat(chat.type)) {
     await greeting()(ctx);
   }
-
-  if (chat.id !== ADMIN_ID) {
-    const name = user.first_name || chat.title || 'Unknown';
-    const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
-    const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
-
-    await ctx.telegram.sendMessage(
-      ADMIN_ID,
-      `*New ${chatTypeLabel} started the bot!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
-      { parse_mode: 'Markdown' }
-    );
-  }
 });
 
 // --- Main Handler: Study Search ---
@@ -83,19 +70,6 @@ bot.on('message', async (ctx) => {
       ctx.message.text = message.text.replace(`@${BOT_USERNAME}`, '').trim();
     }
     await studySearch()(ctx);
-  }
-
-  // Notify admin for first interaction
-  if (chat.id !== ADMIN_ID) {
-    const name = user.first_name || chat.title || 'Unknown';
-    const username = user.username ? `@${user.username}` : chat.username ? `@${chat.username}` : 'N/A';
-    const chatTypeLabel = chat.type.charAt(0).toUpperCase() + chat.type.slice(1);
-
-    await ctx.telegram.sendMessage(
-      ADMIN_ID,
-      `*New ${chatTypeLabel} interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
-      { parse_mode: 'Markdown' }
-    );
   }
 });
 
