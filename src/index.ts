@@ -60,23 +60,6 @@ bot.command('start', async (ctx) => {
   }
 });
 
-// Admin: /users
-bot.command('users', async (ctx) => {
-  if (ctx.from?.id !== ADMIN_ID) return ctx.reply('You are not authorized.');
-  try {
-    // Placeholder: Replace with actual logic to fetch user count if needed
-    await ctx.reply(`📊 Total interacting entities: [Count unavailable]`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
-      },
-    });
-  } catch (err) {
-    console.error('Error fetching user count:', err);
-    await ctx.reply('❌ Unable to fetch user count.');
-  }
-});
-
 // --- Main Handler: Study Search ---
 bot.on('message', async (ctx) => {
   const chat = ctx.chat;
@@ -113,40 +96,6 @@ bot.on('message', async (ctx) => {
       `*New ${chatTypeLabel} interacted!*\n\n*Name:* ${name}\n*Username:* ${username}\n*Chat ID:* ${chat.id}\n*Type:* ${chat.type}`,
       { parse_mode: 'Markdown' }
     );
-  }
-});
-
-// --- New Group Members ---
-bot.on('new_chat_members', async (ctx) => {
-  for (const member of ctx.message.new_chat_members) {
-    const name = member.first_name || 'there';
-    if (member.username === ctx.botInfo?.username) {
-      await ctx.reply(`*Thanks for adding me!*\n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
-        parse_mode: 'Markdown',
-      });
-    } else {
-      await ctx.reply(`*Hi ${name}!* Welcome! \n\nType *@${BOT_USERNAME} mtg bio* to get study material.`, {
-        parse_mode: 'Markdown',
-      });
-    }
-  }
-});
-
-// --- Refresh Inline Button ---
-bot.action('refresh_users', async (ctx) => {
-  if (ctx.from?.id !== ADMIN_ID) return ctx.answerCbQuery('Unauthorized');
-  try {
-    // Placeholder: Replace with actual logic to fetch user count if needed
-    await ctx.editMessageText(`📊 Total interacting entities: [Count unavailable] (refreshed)`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Refresh', callback_data: 'refresh_users' }]],
-      },
-    });
-    await ctx.answerCbQuery('Refreshed!');
-  } catch (err) {
-    console.error('Failed to refresh user count:', err);
-    await ctx.answerCbQuery('Refresh failed');
   }
 });
 
